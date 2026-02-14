@@ -44,7 +44,6 @@ export const LiveWaveform = ({
   const lastActiveDataRef = useRef<number[]>([])
   const transitionProgressRef = useRef(0)
   const staticBarsRef = useRef<number[]>([])
-  const targetBarsRef = useRef<number[]>([]) // Target values for smooth interpolation
   const needsRedrawRef = useRef(true)
   const gradientCacheRef = useRef<CanvasGradient | null>(null)
   const lastWidthRef = useRef(0)
@@ -164,45 +163,24 @@ export const LiveWaveform = ({
     }
   }, [processing, active, barWidth, barGap])
 
+  // Track audio level for responsive animation
+  const audioLevelRef = useRef(0)
+  const smoothedLevelRef = useRef(0)
+  const waveTimeRef = useRef(0)
+
   // Handle backend audio level updates
   useEffect(() => {
     if (!active || audioLevel === undefined) {
       return
     }
 
+    // Normalize and heavily amplify the audio level for dramatic response
     const normalizedLevel = Math.min(1, Math.max(0, audioLevel / 100))
+    // Aggressive amplification: cube root boosts low values significantly
+    // e.g., 0.1 becomes 0.46, 0.2 becomes 0.58, 0.5 becomes 0.79
+    const amplifiedLevel = Math.pow(normalizedLevel, 0.33) * 1.2
+    audioLevelRef.current = Math.min(1, amplifiedLevel)
 
-    // For static mode, create symmetric bars based on audio level with variation
-    const barCount = Math.floor(
-      (containerRef.current?.getBoundingClientRect().width || 200) /
-        (barWidth + barGap)
-    )
-    const halfCount = Math.floor(barCount / 2)
-    const newBars: number[] = []
-
-    // Initialize staticBarsRef if empty
-    if (staticBarsRef.current.length === 0) {
-      staticBarsRef.current = new Array(barCount).fill(0.02)
-    }
-
-    for (let i = 0; i < barCount; i++) {
-      const normalizedPosition = Math.abs((i - halfCount) / halfCount)
-      // Reduced center bias from 0.6 to 0.3 so edge bars participate more
-      const centerWeight = 1 - normalizedPosition * 0.3
-
-      // Add slight random variation per bar for more organic feel
-      const variation = 0.9 + Math.random() * 0.2 // 0.9 to 1.1
-
-      // Apply sensitivity boost with variation
-      const baseValue =
-        normalizedLevel * centerWeight * sensitivity * 8 * variation
-      const value = Math.max(0.02, Math.min(1, baseValue))
-
-      newBars.push(value)
-    }
-
-    // Set target bars for smooth interpolation
-    targetBarsRef.current = newBars
     needsRedrawRef.current = true
   }, [audioLevel, active, mode, barWidth, barGap, sensitivity])
 
@@ -219,20 +197,74 @@ export const LiveWaveform = ({
     const animate = () => {
       const rect = canvas.getBoundingClientRect()
 
-      // Smooth interpolation towards target values
-      if (active && targetBarsRef.current.length > 0) {
-        const smoothingFactor = 0.15 // Lower = smoother but slower, higher = faster but jerkier
+      // Animate when active - only bounce when talking
+      if (active) {
+        // Smooth the audio level for fluid transitions
+        const targetLevel = audioLevelRef.current
+        smoothedLevelRef.current +=
+          (targetLevel - smoothedLevelRef.current) * 0.15
+        const level = smoothedLevelRef.current
 
-        // Interpolate each bar towards its target
-        for (let i = 0; i < staticBarsRef.current.length; i++) {
-          const current = staticBarsRef.current[i] || 0.02
-          const target = targetBarsRef.current[i] || 0.02
+        // Higher threshold for "talking" detection - must be clearly speaking
+        const talkingThreshold = 0.15
+        const isTalking = level > talkingThreshold
 
-          // Lerp: current + (target - current) * smoothingFactor
-          staticBarsRef.current[i] =
-            current + (target - current) * smoothingFactor
+        // Only progress time when talking
+        if (isTalking) {
+          waveTimeRef.current += 0.04 // Slower for smoother animation
         }
 
+        const step = barWidth + barGap
+        const barCount = Math.floor(rect.width / step)
+        const halfCount = Math.floor(barCount / 2)
+
+        // Initialize bars at idle height
+        if (staticBarsRef.current.length !== barCount) {
+          staticBarsRef.current = new Array(barCount).fill(0.08)
+        }
+
+        const t = waveTimeRef.current
+
+        for (let i = 0; i < barCount; i++) {
+          const normalizedPosition = (i - halfCount) / halfCount
+          const centerWeight = 1 - Math.abs(normalizedPosition) * 0.4
+
+          // Each bar has unique properties
+          const seed1 = Math.sin(i * 12.9898) * 43758.5453
+          const seed2 = Math.sin(i * 78.233) * 43758.5453
+          const barSeed1 = seed1 - Math.floor(seed1)
+          const barSeed2 = seed2 - Math.floor(seed2)
+          const barAmplitude = 0.6 + barSeed2 * 0.4
+
+          let targetValue: number
+
+          if (isTalking) {
+            // TALKING: Smooth animation based on audio level
+            const barSpeed = 0.5 + barSeed1 * 0.5
+            const oscillation = Math.sin(t * barSpeed * 2) * 0.5 + 0.5
+
+            // Height based on audio level with gentle oscillation
+            const levelFactor = Math.min(1, (level - talkingThreshold) / 0.5)
+            const baseHeight = 0.12 + levelFactor * 0.4 * barAmplitude
+            const variation = oscillation * 0.15 * barAmplitude * levelFactor
+
+            targetValue = Math.min(
+              0.9,
+              (baseHeight + variation) * centerWeight * sensitivity
+            )
+          } else {
+            // SILENT: Completely flat/minimal
+            targetValue = 0.08 * centerWeight
+          }
+
+          // Smooth interpolation - gentle transitions
+          const current = staticBarsRef.current[i] || 0.08
+          const diff = targetValue - current
+          const smoothing = isTalking ? 0.08 : 0.04 // Slower, smoother
+          staticBarsRef.current[i] = Math.max(0.05, current + diff * smoothing)
+        }
+
+        lastActiveDataRef.current = [...staticBarsRef.current]
         needsRedrawRef.current = true
       }
 

@@ -12,12 +12,14 @@ export function TranscriptionGroup({
   onDeleteTranscription,
 }: TranscriptionGroupProps) {
   return (
-    <div>
-      <div className="sticky top-[42px] bg-background z-10 pb-3 pt-1">
-        <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
+    <div className="mb-6">
+      <div className="sticky top-[30px] mr-0 z-10 -mx-8 px-8 bg-background pb-2.5 pt-1 shadow-[0_8px_12px_-4px_hsl(var(--background))]">
+        <span className="inline-flex items-center text-[11px] font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
+          {group.label}
+        </span>
       </div>
 
-      <div className="mb-6 rounded-xl border border-border bg-background overflow-hidden">
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
         {group.transcriptions.map((transcription, index) => (
           <TranscriptionCard
             key={transcription.id}

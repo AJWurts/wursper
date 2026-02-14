@@ -60,7 +60,7 @@ export function ModelsTable({
 
   return (
     <div className="pb-16">
-      <h2 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wide">
+      <h2 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-widest">
         Available Models
       </h2>
       <div className="rounded-md border">

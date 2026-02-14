@@ -97,6 +97,13 @@ pub fn register_voice_input_shortcut(app: &App) -> Result<()> {
 
 /// Retrieves the voice input shortcut from settings
 fn get_voice_input_shortcut_from_settings(app: &AppHandle) -> String {
+    // Try cache first for faster access
+    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
+        if let Some(shortcut) = cache.get_voice_input_shortcut() {
+            return shortcut;
+        }
+    }
+    // Fallback to direct store access
     let store = app.store("settings");
     store
         .ok()
@@ -113,6 +120,13 @@ fn get_voice_input_shortcut_from_settings(app: &AppHandle) -> String {
 
 /// Retrieves the PTT shortcut from settings
 fn get_ptt_shortcut_from_settings(app: &AppHandle) -> String {
+    // Try cache first for faster access
+    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
+        if let Some(shortcut) = cache.get_ptt_shortcut() {
+            return shortcut;
+        }
+    }
+    // Fallback to direct store access
     let store = app.store("settings");
     store
         .ok()
@@ -129,6 +143,13 @@ fn get_ptt_shortcut_from_settings(app: &AppHandle) -> String {
 
 /// Retrieves the enable push-to-talk setting
 fn get_enable_push_to_talk_from_settings(app: &AppHandle) -> bool {
+    // Try cache first for faster access
+    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
+        if let Some(enabled) = cache.get_enable_push_to_talk() {
+            return enabled;
+        }
+    }
+    // Fallback to direct store access
     let store = app.store("settings");
     store
         .ok()
@@ -420,6 +441,13 @@ pub async fn enable_global_shortcuts(
 
 /// Retrieves the paste shortcut from settings
 fn get_paste_shortcut_from_settings(app: &AppHandle) -> String {
+    // Try cache first for faster access
+    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
+        if let Some(shortcut) = cache.get_paste_shortcut() {
+            return shortcut;
+        }
+    }
+    // Fallback to direct store access
     let store = app.store("settings");
     store
         .ok()

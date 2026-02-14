@@ -1,4 +1,5 @@
 use crate::features::audio::enumerate_audio_devices;
+use crate::features::audio::state::RecordingStateManager;
 use crate::features::models::LocalModelManager;
 use crate::utils::logger;
 use serde_json::json;
@@ -154,18 +155,33 @@ fn rebuild_tray_menu(app: &AppHandle, _model_manager: Arc<Mutex<LocalModelManage
         .unwrap_or_default();
 
     // Get current microphone device from settings
+    // Reload the store to ensure we have fresh data
     let store = app.store("settings").map_err(|e| {
         tauri::Error::Io(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!("Failed to get store: {}", e),
         ))
     })?;
+
+    // Force reload from disk to get latest changes
+    store.reload().map_err(|e| {
+        tauri::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to reload store: {}", e),
+        ))
+    })?;
+
     let current_device_id = store.get("settings").and_then(|settings| {
         settings
             .get("voiceInput")
             .and_then(|voice_input| voice_input.get("microphoneDeviceId"))
             .and_then(|device_id| device_id.as_str().map(|s| s.to_string()))
     });
+
+    log::debug!(
+        "Rebuilding tray menu, current device ID: {:?}",
+        current_device_id
+    );
 
     // Build microphone submenu dynamically
     let mut microphone_submenu_builder = SubmenuBuilder::new(app, "Microphone");
@@ -324,6 +340,13 @@ fn set_microphone_device(
         ))
     })?;
 
+    // Invalidate settings cache to ensure it stays in sync
+    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
+        if let Err(e) = cache.invalidate(app) {
+            log::warn!("Failed to invalidate settings cache: {}", e);
+        }
+    }
+
     // Emit event to notify frontend
     let _ = app.emit(
         "microphone-device-changed",
@@ -367,6 +390,13 @@ fn handle_tray_event(
             });
         }
         "mic-auto-detect" => {
+            // Check if recording is active - don't allow microphone changes during recording
+            if let Some(state_manager) = app.try_state::<Arc<RecordingStateManager>>() {
+                if state_manager.is_active() {
+                    logger::warn("Cannot change microphone while recording is active");
+                    return;
+                }
+            }
             // Set microphone to auto-detect (null)
             if let Err(e) = set_microphone_device(app, None, model_manager_cleanup.clone()) {
                 logger::error(&format!("Failed to set microphone to auto-detect: {}", e));
@@ -375,6 +405,13 @@ fn handle_tray_event(
             }
         }
         event_id if event_id.starts_with("mic-") => {
+            // Check if recording is active - don't allow microphone changes during recording
+            if let Some(state_manager) = app.try_state::<Arc<RecordingStateManager>>() {
+                if state_manager.is_active() {
+                    logger::warn("Cannot change microphone while recording is active");
+                    return;
+                }
+            }
             // Handle specific microphone selection
             let device_id = event_id.strip_prefix("mic-").unwrap().to_string();
             if let Err(e) =
@@ -405,8 +442,12 @@ fn handle_tray_event(
             }
         }
         "general-feedback" => {
-            // TODO: Open feedback URL
             logger::info("General feedback clicked");
+            // Open mailto link with pre-filled support email
+            let mailto_url = "mailto:support@dicta.app?subject=Dicta%20Feedback";
+            if let Err(e) = open::that(mailto_url) {
+                logger::error_with("Failed to open email client", &[("error", &e.to_string())]);
+            }
         }
         "quit" => {
             // Cleanup local model before exit
@@ -530,4 +571,10 @@ fn handle_menu_bar_event(app: &AppHandle, event_id: &str) {
         }
         _ => {}
     }
+}
+
+#[tauri::command]
+pub async fn rebuild_tray_menu_command(app: AppHandle) -> Result<()> {
+    let model_manager = app.state::<Arc<Mutex<LocalModelManager>>>();
+    rebuild_tray_menu(&app, model_manager.inner().clone())
 }

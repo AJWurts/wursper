@@ -16,11 +16,10 @@ export function InfoCard({
   return (
     <div
       className={cn(
-        'rounded-xl p-4 transition-colors',
-        variant === 'default' &&
-          'bg-linear-to-br from-gray-50 to-gray-100/50 border border-gray-200',
+        'rounded-lg p-4 transition-colors',
+        variant === 'default' && 'bg-surface border border-border',
         variant === 'accent' &&
-          'bg-linear-to-br from-primary/5 to-primary/10 border border-primary/20',
+          'bg-surface border-l-2 border-l-primary border border-border',
         className
       )}
     >
@@ -37,7 +36,7 @@ InfoCard.Title = function InfoCardTitle({
   className?: string
 }) {
   return (
-    <h3 className={cn('text-xl font-semibold text-foreground mb-3', className)}>
+    <h3 className={cn('text-base font-medium text-foreground mb-2', className)}>
       {children}
     </h3>
   )
@@ -66,5 +65,5 @@ InfoCard.Content = function InfoCardContent({
   children: ReactNode
   className?: string
 }) {
-  return <div className={cn('space-y-4', className)}>{children}</div>
+  return <div className={cn('space-y-3', className)}>{children}</div>
 }

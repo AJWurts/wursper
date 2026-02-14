@@ -86,6 +86,48 @@ export const getProviderInfo = (provider: ModelProvider): ProviderInfo => {
         icon: <ProviderLogo provider="openai" />,
         color: 'text-purple-600',
       }
+    case 'candle':
+      return {
+        name: 'Candle (Metal)',
+        icon: (
+          <img
+            alt="HuggingFace Candle"
+            className="size-4"
+            height={16}
+            src="/icons/huggingface.svg"
+            width={16}
+          />
+        ),
+        color: 'text-yellow-500',
+      }
+    case 'whisperkit':
+      return {
+        name: 'WhisperKit',
+        icon: (
+          <img
+            alt="WhisperKit"
+            className="size-4"
+            height={16}
+            src="/icons/whisperkit-dark.png"
+            width={16}
+          />
+        ),
+        color: 'text-blue-500',
+      }
+    case 'apple-speech':
+      return {
+        name: 'Apple Speech',
+        icon: (
+          <img
+            alt="Apple"
+            className="size-4 dark:invert"
+            height={16}
+            src="/icons/apple.svg"
+            width={16}
+          />
+        ),
+        color: 'text-gray-600',
+      }
     default:
       return {
         name: provider,

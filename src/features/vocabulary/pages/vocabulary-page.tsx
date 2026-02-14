@@ -1,8 +1,13 @@
-import { BookOpen, Plus, Pencil, Trash2, Sparkles } from 'lucide-react'
+import { BookOpen, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { InfoCard } from '@/components/ui/info-card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 import { VocabularyDialog } from '../components/vocabulary-dialog'
 import { useVocabularyStore } from '../store'
@@ -45,105 +50,75 @@ export function VocabularyPage() {
       <div className="h-full p-8 pt-16 pb-16">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-4">
-            Vocabulary
-          </h1>
-          <div className="flex items-center gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-primary" />
-              <span className="text-muted-foreground">
-                {words.length} word{words.length !== 1 ? 's' : ''}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-medium tracking-tight text-foreground">
+                Vocabulary
+              </h1>
+              <span className="text-xs font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded tabular-nums">
+                {words.length}
               </span>
             </div>
+            <Button size="sm" onClick={handleCreate}>
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              Add Word
+            </Button>
           </div>
+          <p className="text-sm text-muted-foreground mt-1.5">
+            Custom words and terms to improve transcription accuracy.
+          </p>
         </div>
-
-        {/* Info Section */}
-        <InfoCard variant="accent" className="mb-8">
-          <InfoCard.Content className="flex flex-col">
-            <div>
-              <InfoCard.Title>
-                Build your{' '}
-                <span className="text-primary italic sour-gummy">
-                  custom vocabulary
-                </span>
-              </InfoCard.Title>
-              <InfoCard.Description>
-                Add names, technical terms, or specialized words to improve
-                speech recognition accuracy. These words will be prioritized
-                during transcription.
-              </InfoCard.Description>
-            </div>
-            <div>
-              <Button className="h-9 px-4" onClick={handleCreate}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Word
-              </Button>
-            </div>
-          </InfoCard.Content>
-        </InfoCard>
 
         {/* Content */}
         <div>
-          <h2 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wide">
-            Your Words
-          </h2>
-          <div className="space-y-2">
-            {words.length === 0 ? (
-              /* Empty state */
-              <div className="flex flex-col items-center justify-center py-16 px-4 rounded-lg">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full mb-3">
-                  <Sparkles className="w-5 h-5 text-gray-400" />
+          {words.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 px-4">
+              <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted/60 mb-4">
+                <BookOpen
+                  className="w-5 h-5 text-muted-foreground/60"
+                  strokeWidth={1.5}
+                />
+              </div>
+              <h3 className="text-sm font-medium text-foreground mb-1">
+                No words yet
+              </h3>
+              <p className="text-xs text-muted-foreground text-center max-w-[260px] leading-relaxed">
+                Start building your custom vocabulary for better transcription
+                accuracy
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {words.map(word => (
+                <div
+                  key={word.id}
+                  className="group relative inline-flex items-center rounded-md border border-border bg-card text-sm text-foreground hover:border-border/80 transition-colors"
+                >
+                  <span className="font-medium px-3 py-1.5">{word.word}</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center justify-center h-full px-2 border-l border-border opacity-0 group-hover:opacity-100 hover:bg-accent/50 transition-all rounded-r-md focus:opacity-100 focus:outline-none">
+                        <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-32">
+                      <DropdownMenuItem onClick={() => handleEdit(word)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => handleDelete(word.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <h3 className="text-sm font-medium text-foreground mb-1">
-                  No words yet
-                </h3>
-                <p className="text-xs text-muted-foreground text-center max-w-sm">
-                  Start building your custom vocabulary for better transcription
-                  accuracy
-                </p>
-              </div>
-            ) : (
-              /* Words list */
-              <div className="rounded-xl border border-border bg-background overflow-hidden">
-                {words.map((word, index) => (
-                  <div
-                    key={word.id}
-                    className={`group p-4 hover:bg-muted/30 transition-colors ${
-                      index !== words.length - 1 ? 'border-b border-border' : ''
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground">
-                          {word.word}
-                        </p>
-                      </div>
-
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(word)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(word.id)}
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

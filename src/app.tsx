@@ -1,4 +1,10 @@
-import { CircleCheck, CircleX, Info, TriangleAlert } from 'lucide-react'
+import {
+  CircleCheck,
+  CircleX,
+  Info,
+  Loader2,
+  TriangleAlert,
+} from 'lucide-react'
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
@@ -31,7 +37,7 @@ function App() {
     <ThemeProvider defaultTheme="system">
       <BrowserRouter>
         <Toaster
-          position="bottom-right"
+          position="bottom-center"
           gap={8}
           closeButton
           expand={false}
@@ -40,7 +46,9 @@ function App() {
             error: <CircleX className="size-[18px] text-red-500" />,
             info: <Info className="size-[18px] text-blue-500" />,
             warning: <TriangleAlert className="size-[18px] text-amber-500" />,
-            loading: null,
+            loading: (
+              <Loader2 className="size-[18px] text-primary animate-spin" />
+            ),
           }}
           toastOptions={{
             unstyled: true,

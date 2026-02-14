@@ -33,6 +33,12 @@ pub enum ModelProvider {
     ElevenLabs,
     #[serde(rename = "local-whisper")]
     LocalWhisper,
+    #[serde(rename = "candle")]
+    Candle,
+    #[serde(rename = "whisperkit")]
+    WhisperKit,
+    #[serde(rename = "apple-speech")]
+    AppleSpeech,
     #[serde(rename = "ollama")]
     Ollama,
     #[serde(rename = "lmstudio")]
@@ -115,27 +121,143 @@ const POST_PROCESSING_CLOUD_MODELS: &[(&str, &str, &str, &str)] = &[
 ];
 
 // Local Whisper models
-pub const WHISPER_MODELS: &[(&str, &str, &str)] = &[
+// Format: (id, url, size, description, category, remote_filename)
+// remote_filename: The actual filename on HuggingFace (None means use "ggml-{id}.bin")
+pub const WHISPER_MODELS: &[(&str, &str, &str, &str, &str, Option<&str>)] = &[
+    // Standard models
     (
         "tiny",
         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
-        "75 MB",
+        "78 MB",
+        "Fastest, basic accuracy",
+        "standard",
+        None,
     ),
     (
         "base",
         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-        "142 MB",
+        "148 MB",
+        "Fast, good accuracy",
+        "standard",
+        None,
     ),
     (
         "small",
         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
-        "466 MB",
+        "488 MB",
+        "Balanced speed and accuracy",
+        "standard",
+        None,
     ),
     (
         "medium",
         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
-        "1.5 GB",
+        "1.53 GB",
+        "High accuracy, slower",
+        "standard",
+        None,
     ),
+    // Turbo model - Best quality with good speed (Recommended)
+    (
+        "large-v3-turbo",
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
+        "1.62 GB",
+        "Best quality, 8x faster than large-v3",
+        "turbo",
+        None,
+    ),
+    // Distilled models - 6x faster with minimal quality loss
+    (
+        "distil-large-v3",
+        "https://huggingface.co/distil-whisper/distil-large-v3-ggml/resolve/main/ggml-distil-large-v3.bin",
+        "1.52 GB",
+        "Near-best quality, 6x faster",
+        "distilled",
+        None,
+    ),
+    (
+        "distil-medium.en",
+        "https://huggingface.co/distil-whisper/distil-medium.en/resolve/main/ggml-medium-32-2.en.bin",
+        "794 MB",
+        "English-only, 6x faster",
+        "distilled",
+        Some("ggml-medium-32-2.en.bin"),
+    ),
+    (
+        "distil-small.en",
+        "https://huggingface.co/distil-whisper/distil-small.en/resolve/main/ggml-distil-small.en.bin",
+        "336 MB",
+        "English-only, compact and fast",
+        "distilled",
+        Some("ggml-distil-small.en.bin"),
+    ),
+];
+
+// Candle Whisper models (safetensors format, Metal GPU accelerated)
+// Format: (id, hf_repo, size, description)
+pub const CANDLE_MODELS: &[(&str, &str, &str, &str)] = &[
+    (
+        "large-v3-turbo",
+        "openai/whisper-large-v3-turbo",
+        "1.6 GB",
+        "Best quality with Metal GPU acceleration",
+    ),
+    (
+        "large-v3",
+        "openai/whisper-large-v3",
+        "3.1 GB",
+        "Highest accuracy, Metal GPU accelerated",
+    ),
+    (
+        "distil-large-v3",
+        "distil-whisper/distil-large-v3",
+        "1.5 GB",
+        "Near-best quality, 6x faster with GPU",
+    ),
+    (
+        "medium",
+        "openai/whisper-medium",
+        "1.5 GB",
+        "High accuracy with Metal GPU",
+    ),
+    (
+        "small",
+        "openai/whisper-small",
+        "488 MB",
+        "Balanced speed and accuracy with GPU",
+    ),
+    (
+        "base",
+        "openai/whisper-base",
+        "148 MB",
+        "Fast with GPU acceleration",
+    ),
+    (
+        "tiny",
+        "openai/whisper-tiny",
+        "78 MB",
+        "Fastest, basic accuracy with GPU",
+    ),
+];
+
+// WhisperKit models (CoreML format, Apple Neural Engine optimized)
+// Format: (id, size, description)
+// Note: Models are downloaded from argmaxinc/whisperkit-coreml HuggingFace repo
+pub const WHISPERKIT_MODELS: &[(&str, &str, &str)] = &[
+    (
+        "large-v3-turbo",
+        "800 MB",
+        "Best quality with Neural Engine acceleration",
+    ),
+    ("large-v3", "1.5 GB", "Highest accuracy with Neural Engine"),
+    (
+        "distil-large-v3",
+        "750 MB",
+        "Near-best quality, optimized for speed",
+    ),
+    ("small", "250 MB", "Balanced performance with Neural Engine"),
+    ("base", "80 MB", "Fast and lightweight"),
+    ("tiny", "45 MB", "Fastest, minimal footprint"),
 ];
 
 #[command]
@@ -200,15 +322,56 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
 
     let whisper_dir = app_data_dir.join("local_models").join("whisper");
 
-    for (name, url, size) in WHISPER_MODELS {
-        let filename = format!("ggml-{}.bin", name);
+    for (name, url, size, description, category, remote_filename) in WHISPER_MODELS {
+        // Use remote_filename if provided, otherwise generate from name
+        let filename = remote_filename
+            .map(|f| f.to_string())
+            .unwrap_or_else(|| format!("ggml-{}.bin", name));
         let model_path = whisper_dir.join(&filename);
         let downloaded = model_path.exists();
 
-        let model_name = format!(
-            "Whisper {}",
-            name.chars().next().unwrap().to_uppercase().to_string() + &name[1..]
-        );
+        // Format display name based on model type
+        let model_name = match *category {
+            "turbo" => format!("Whisper Large V3 Turbo"),
+            "distilled" => {
+                if name.contains(".en") {
+                    format!(
+                        "Distil Whisper {} (English)",
+                        name.replace("distil-", "")
+                            .replace(".en", "")
+                            .chars()
+                            .next()
+                            .unwrap()
+                            .to_uppercase()
+                            .to_string()
+                            + &name.replace("distil-", "").replace(".en", "")[1..]
+                    )
+                } else {
+                    format!(
+                        "Distil Whisper {}",
+                        name.replace("distil-", "")
+                            .chars()
+                            .next()
+                            .unwrap()
+                            .to_uppercase()
+                            .to_string()
+                            + &name.replace("distil-", "")[1..]
+                    )
+                }
+            }
+            _ => format!(
+                "Whisper {}",
+                name.chars().next().unwrap().to_uppercase().to_string() + &name[1..]
+            ),
+        };
+
+        // Determine if this should be the default selected model
+        // Prefer large-v3-turbo if available, otherwise tiny
+        let is_default = *name == "large-v3-turbo"
+            || (*name == "tiny"
+                && !WHISPER_MODELS
+                    .iter()
+                    .any(|(n, _, _, _, _, _)| *n == "large-v3-turbo"));
 
         models.push(ModelDefinition {
             id: format!("whisper-{}", name),
@@ -219,20 +382,145 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             engine: Some("whisper".to_string()), // Uses Whisper engine
             size: Some(size.to_string()),
             requires_api_key: false,
-            // Set whisper-tiny as default selected
-            is_selected: *name == "tiny",
+            is_selected: is_default,
             is_downloaded: Some(downloaded),
             path: if downloaded {
                 Some(model_path.to_string_lossy().to_string())
             } else {
                 None
             },
-            description: Some(format!(
-                "{} model - Runs locally without internet",
-                model_name
-            )),
+            description: Some(format!("{} - Runs locally", description)),
             download_url: Some(url.to_string()),
             filename: Some(filename),
+        });
+    }
+
+    // Add Candle Whisper models (Metal GPU accelerated)
+    let candle_dir = app_data_dir.join("local_models").join("candle");
+    for (name, hf_repo, size, description) in CANDLE_MODELS {
+        // Candle models are downloaded from HuggingFace and cached
+        // Check if model.safetensors exists in the cache directory
+        let cache_path = candle_dir.join(*name).join("model.safetensors");
+        let downloaded = cache_path.exists();
+
+        let model_name = if name.contains("large-v3-turbo") {
+            "Candle Large V3 Turbo (Metal)".to_string()
+        } else if name.contains("large-v3") {
+            "Candle Large V3 (Metal)".to_string()
+        } else if name.contains("distil") {
+            format!(
+                "Candle Distil {} (Metal)",
+                name.replace("distil-", "")
+                    .chars()
+                    .next()
+                    .unwrap()
+                    .to_uppercase()
+                    .to_string()
+                    + &name.replace("distil-", "")[1..]
+            )
+        } else {
+            format!(
+                "Candle {} (Metal)",
+                name.chars().next().unwrap().to_uppercase().to_string() + &name[1..]
+            )
+        };
+
+        models.push(ModelDefinition {
+            id: format!("candle-{}", name),
+            name: model_name,
+            provider: ModelProvider::Candle,
+            model_type: ModelType::Local,
+            purpose: ModelPurpose::SpeechToText,
+            engine: Some("candle".to_string()),
+            size: Some(size.to_string()),
+            requires_api_key: false,
+            is_selected: false,
+            is_downloaded: Some(downloaded),
+            path: if downloaded {
+                Some(cache_path.to_string_lossy().to_string())
+            } else {
+                None
+            },
+            description: Some(format!("{} - Pure Rust with Metal GPU", description)),
+            download_url: Some(format!("hf://{}", hf_repo)),
+            filename: Some("model.safetensors".to_string()),
+        });
+    }
+
+    // Add WhisperKit models (macOS only, CoreML/Neural Engine)
+    #[cfg(target_os = "macos")]
+    {
+        let whisperkit_dir = app_data_dir.join("local_models").join("whisperkit");
+        for (name, size, description) in WHISPERKIT_MODELS {
+            let model_path = whisperkit_dir.join(*name);
+            let downloaded = model_path.exists();
+
+            let model_name = if name.contains("large-v3-turbo") {
+                "WhisperKit Large V3 Turbo".to_string()
+            } else if name.contains("large-v3") {
+                "WhisperKit Large V3".to_string()
+            } else if name.contains("distil") {
+                format!(
+                    "WhisperKit Distil {}",
+                    name.replace("distil-", "")
+                        .chars()
+                        .next()
+                        .unwrap()
+                        .to_uppercase()
+                        .to_string()
+                        + &name.replace("distil-", "")[1..]
+                )
+            } else {
+                format!(
+                    "WhisperKit {}",
+                    name.chars().next().unwrap().to_uppercase().to_string() + &name[1..]
+                )
+            };
+
+            models.push(ModelDefinition {
+                id: format!("whisperkit-{}", name),
+                name: model_name,
+                provider: ModelProvider::WhisperKit,
+                model_type: ModelType::Local,
+                purpose: ModelPurpose::SpeechToText,
+                engine: Some("whisperkit".to_string()),
+                size: Some(size.to_string()),
+                requires_api_key: false,
+                is_selected: false,
+                is_downloaded: Some(downloaded),
+                path: if downloaded {
+                    Some(model_path.to_string_lossy().to_string())
+                } else {
+                    None
+                },
+                description: Some(format!("{} - CoreML with Neural Engine", description)),
+                download_url: Some(format!("hf://argmaxinc/whisperkit-coreml/{}", name)),
+                filename: None,
+            });
+        }
+    }
+
+    // Add Apple Speech model (macOS only, no download needed)
+    #[cfg(target_os = "macos")]
+    {
+        models.push(ModelDefinition {
+            id: "apple-speech".to_string(),
+            name: "Apple Speech Recognition".to_string(),
+            provider: ModelProvider::AppleSpeech,
+            model_type: ModelType::Local,
+            purpose: ModelPurpose::SpeechToText,
+            engine: Some("apple-speech".to_string()),
+            size: Some("Built-in".to_string()),
+            requires_api_key: false,
+            is_selected: false,
+            is_downloaded: Some(true), // Always available on macOS
+            path: Some("system://apple-speech".to_string()),
+            description: Some(
+                "macOS built-in speech recognition - No download required, instant setup"
+                    .to_string(),
+            ),
+            download_url: None,
+            filename: None,
         });
     }
 

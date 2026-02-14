@@ -8,6 +8,7 @@ export const transcriptionRecordSchema = z.object({
   wordCount: z.number(),
   modelId: z.string(),
   provider: z.string(),
+  hasAudio: z.boolean().optional().default(false),
 })
 
 export const transcriptionsStoreSchema = z.object({

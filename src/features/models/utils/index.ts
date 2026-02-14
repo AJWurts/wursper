@@ -1,4 +1,5 @@
 export * from './local-model-actions'
 export * from './model-actions'
+export * from './model-groups'
 export * from './model-type-config'
 export * from './table-columns'

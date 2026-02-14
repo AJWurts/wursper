@@ -1,131 +1,95 @@
+'use client'
+
 export default function Pricing() {
   const features = [
-    "Unlimited voice transcription",
-    "Local & cloud processing",
-    "Custom vocabulary builder",
-    "Unlimited text snippets",
-    "All Vibes presets",
-    "Keyboard shortcuts",
-    "System-wide integration",
-    "Regular updates",
-    "Community support",
-    "No usage limits",
-    "No hidden fees",
-    "Forever free",
-  ];
-
-  const reasons = [
-    {
-      icon: (
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-      ),
-      title: "Community Built",
-      description: "Made by developers who believe great tools should be accessible to everyone",
-    },
-    {
-      icon: (
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-        </svg>
-      ),
-      title: "Open Source",
-      description: "Transparency and freedom are core values. Fork it, modify it, contribute to it",
-    },
-    {
-      icon: (
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-      ),
-      title: "No Venture Capital",
-      description: "Not beholden to investors. Our users are our stakeholders",
-    },
-  ];
+    'Unlimited voice transcription',
+    'Local AI processing (Whisper)',
+    'Custom vocabulary builder',
+    'Unlimited text snippets',
+    'All Vibes presets',
+    'Global keyboard shortcuts',
+    'System-wide integration',
+    'Regular updates',
+    'Community support',
+    'No usage limits',
+    'No hidden fees',
+    'Forever free',
+  ]
 
   return (
-    <section className="py-24 px-6">
-      <div className="max-w-7xl mx-auto">
+    <section id="pricing" className="section-spacing relative overflow-hidden">
+      {/* Background */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[150px]" />
+      </div>
+
+      <div className="container-default">
         {/* Section header */}
         <div className="text-center mb-16 space-y-4">
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
-            Simple pricing: <span className="font-serif italic text-primary">$0</span>
+          <h2 className="text-display-lg font-bold">
+            Simple pricing:{' '}
+            <span className="font-[family-name:var(--font-instrument)] italic gradient-text">$0</span>
           </h2>
-          <p className="text-base text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             No tiers, no limits, no credit card required. Just download and start speaking.
           </p>
         </div>
 
-        {/* Pricing card - New design */}
-        <div className="max-w-5xl mx-auto mb-24">
+        {/* Pricing card */}
+        <div className="max-w-4xl mx-auto mb-20">
           <div className="relative">
-            {/* Decorative glows */}
-            <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-96 h-96 bg-primary/20 rounded-full blur-3xl -z-10" />
+            {/* Glow */}
+            <div className="absolute -inset-4 bg-primary/10 rounded-[2.5rem] blur-2xl" />
 
-            <div className="relative bg-secondary/30 rounded-3xl border border-border/50 overflow-hidden group hover:border-primary/30 transition-all">
-              {/* Gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative rounded-3xl border border-border/50 bg-secondary/30 overflow-hidden">
+              {/* Top gradient accent */}
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
 
-              {/* Grid pattern */}
-              <div className="absolute inset-0 opacity-5">
-                <div className="absolute inset-0" style={{
-                  backgroundImage: 'radial-gradient(circle at 1px 1px, rgb(61, 143, 95) 1px, transparent 0)',
-                  backgroundSize: '40px 40px'
-                }} />
-              </div>
-
-              <div className="relative z-10 grid md:grid-cols-2 gap-12 p-12">
+              <div className="grid md:grid-cols-2 gap-8 p-8 md:p-12">
                 {/* Left side - Price and CTA */}
                 <div className="space-y-8">
                   {/* Badge */}
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold border border-primary/20">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                    FREE FOREVER
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
+                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                    <span className="text-sm font-semibold text-primary">FREE FOREVER</span>
                   </div>
 
                   {/* Price */}
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-2">
-                      <span className="text-2xl font-bold mt-2">$</span>
-                      <span className="text-7xl font-bold text-primary">0</span>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-1">
+                      <span className="text-2xl font-bold text-muted-foreground mt-3">$</span>
+                      <span className="text-8xl font-bold gradient-text">0</span>
                     </div>
-                    <p className="text-muted-foreground text-base">
+                    <p className="text-muted-foreground">
                       No subscriptions. No trials. No catch.
                     </p>
                   </div>
 
                   {/* CTA */}
-                  <div className="space-y-4 pt-4">
-                    <button className="w-full px-6 py-4 bg-foreground text-background rounded-xl font-semibold text-base hover:bg-foreground/90 transition-all flex items-center justify-center gap-2">
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                  <div className="space-y-4">
+                    <button className="w-full btn-primary px-8 py-4 rounded-2xl text-base font-semibold flex items-center justify-center gap-3">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
                       </svg>
-                      Download Dicta for Free
+                      Download for Mac — Free
                     </button>
                     <p className="text-xs text-muted-foreground text-center">
-                      macOS 10.15 or later • Apple Silicon & Intel
+                      macOS 12.0 or later • Apple Silicon & Intel
                     </p>
                   </div>
 
-                  {/* Stats */}
-                  <div className="pt-4 border-t border-border/50">
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <div className="text-2xl font-bold text-primary">∞</div>
-                        <div className="text-xs text-muted-foreground">Transcriptions</div>
+                  {/* Mini stats */}
+                  <div className="grid grid-cols-3 gap-4 pt-4 border-t border-border/50">
+                    {[
+                      { value: '∞', label: 'Transcriptions' },
+                      { value: '50+', label: 'Languages' },
+                      { value: '0', label: 'Hidden Fees' },
+                    ].map((stat, i) => (
+                      <div key={i} className="text-center">
+                        <div className="text-2xl font-bold gradient-text">{stat.value}</div>
+                        <div className="text-xs text-muted-foreground">{stat.label}</div>
                       </div>
-                      <div>
-                        <div className="text-2xl font-bold text-primary">50+</div>
-                        <div className="text-xs text-muted-foreground">Languages</div>
-                      </div>
-                      <div>
-                        <div className="text-2xl font-bold text-primary">0</div>
-                        <div className="text-xs text-muted-foreground">Hidden Fees</div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
 
@@ -138,20 +102,10 @@ export default function Pricing() {
 
                   <div className="grid gap-3">
                     {features.map((feature, index) => (
-                      <div key={index} className="flex items-center gap-3 text-sm group/item">
-                        <div className="w-5 h-5 rounded-md bg-primary/20 flex items-center justify-center flex-shrink-0 border border-primary/30 transition-transform">
-                          <svg
-                            className="w-3 h-3 text-primary"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2.5}
-                              d="M5 13l4 4L19 7"
-                            />
+                      <div key={index} className="flex items-center gap-3 text-sm">
+                        <div className="w-5 h-5 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                          <svg className="w-3 h-3 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                           </svg>
                         </div>
                         <span className="text-foreground/90">{feature}</span>
@@ -164,55 +118,70 @@ export default function Pricing() {
           </div>
         </div>
 
-        {/* Why free section - Redesigned */}
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12 space-y-4">
-            <h3 className="text-3xl md:text-4xl font-bold">
-              Why is Dicta <span className="font-serif italic text-primary">completely free?</span>
+        {/* Why free section */}
+        <div className="text-center space-y-12">
+          <div className="space-y-4">
+            <h3 className="text-display-md font-bold">
+              Why is Dicta{' '}
+              <span className="font-[family-name:var(--font-instrument)] italic text-primary">completely free?</span>
             </h3>
-            <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-              Our mission is to make powerful voice-to-text accessible to everyone
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              Our mission is to make powerful voice-to-text accessible to everyone.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {reasons.map((reason, index) => (
+          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            {[
+              {
+                icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                ),
+                title: 'Community Built',
+                description: 'Made by developers who believe great tools should be accessible to everyone.',
+              },
+              {
+                icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                ),
+                title: 'Open Source',
+                description: 'Transparency and freedom are core values. Fork it, modify it, contribute to it.',
+              },
+              {
+                icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                ),
+                title: 'No VC Money',
+                description: 'Not beholden to investors. Our users are our only stakeholders.',
+              },
+            ].map((item, i) => (
               <div
-                key={index}
-                className="relative bg-secondary/30 rounded-2xl p-6 border border-border/50 hover:border-primary/30 transition-all group overflow-hidden"
+                key={i}
+                className="p-6 rounded-2xl border border-border/50 bg-secondary/30 card-hover"
               >
-                {/* Hover gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                <div className="relative z-10 space-y-4">
-                  {/* Icon */}
-                  <div className="w-12 h-12 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary transition-transform">
-                    {reason.icon}
-                  </div>
-
-                  {/* Content */}
-                  <div className="space-y-2">
-                    <h4 className="font-bold text-base">{reason.title}</h4>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {reason.description}
-                    </p>
-                  </div>
+                <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mx-auto mb-4">
+                  {item.icon}
                 </div>
+                <h4 className="font-bold mb-2">{item.title}</h4>
+                <p className="text-sm text-muted-foreground">{item.description}</p>
               </div>
             ))}
           </div>
 
-          {/* Supporting statement */}
-          <div className="mt-12 text-center">
-            <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-secondary/50 border border-border/50">
-              <svg className="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm font-medium">Made with love by the community, for the community</span>
-            </div>
+          {/* Bottom badge */}
+          <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-border/50 bg-secondary/30">
+            <svg className="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+            </svg>
+            <span className="text-sm font-medium">Made with love by the community, for the community</span>
           </div>
         </div>
       </div>
     </section>
-  );
+  )
 }

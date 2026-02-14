@@ -1,8 +1,7 @@
-import { Sparkles, FileText, Copy, Plus, Pencil, Trash2 } from 'lucide-react'
+import { SquareBottomDashedScissors, Plus, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { InfoCard } from '@/components/ui/info-card'
 
 import { SnippetDialog } from '../components/snippet-dialog'
 import { useSnippetsStore } from '../store'
@@ -42,112 +41,84 @@ export function SnippetsPage() {
 
   return (
     <div className="h-full w-full flex flex-col px-8">
-      <div className="shrink-0 pt-16">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-4">Snippets</h1>
-          <div className="flex items-center gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-primary" />
-              <span className="text-muted-foreground">
-                {snippets.length} snippet{snippets.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Copy className="w-4 h-4 text-blue-500" />
-              <span className="text-muted-foreground">0 used today</span>
-            </div>
+      <div className="shrink-0 pt-16 pb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-medium tracking-tight text-foreground">
+              Snippets
+            </h1>
+            <span className="text-xs font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded tabular-nums">
+              {snippets.length}
+            </span>
           </div>
+          <Button size="sm" onClick={handleCreate}>
+            <Plus className="w-3.5 h-3.5 mr-1.5" />
+            New Snippet
+          </Button>
         </div>
-        <InfoCard variant="accent" className="mb-8">
-          <InfoCard.Content className="flex flex-col">
-            <div>
-              <InfoCard.Title>
-                Create{' '}
-                <span className="text-primary italic sour-gummy">
-                  reusable snippets
-                </span>
-              </InfoCard.Title>
-              <InfoCard.Description>
-                Save frequently used phrases, responses, or text templates.
-                Quickly insert them into any app with a simple shortcut or
-                search.
-              </InfoCard.Description>
-            </div>
-            <div>
-              <Button className="h-9 px-4" onClick={handleCreate}>
-                <Plus className="w-4 h-4 mr-2" />
-                Create Snippet
-              </Button>
-            </div>
-          </InfoCard.Content>
-        </InfoCard>
+        <p className="text-sm text-muted-foreground mt-1.5">
+          Save frequently used phrases and insert them with a shortcut.
+        </p>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto pb-8">
-        <h2 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wide">
-          Your Snippets
-        </h2>
-        <div className="space-y-2">
-          {snippets.length === 0 ? (
-            /* Empty state */
-            <div className="flex flex-col items-center justify-center py-16 px-4 rounded-lg bg-transparent">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-transparent mb-3">
-                <Sparkles className="w-5 h-5 text-gray-400" />
-              </div>
-              <h3 className="text-sm font-medium text-foreground mb-1">
-                No snippets yet
-              </h3>
-              <p className="text-xs text-muted-foreground text-center max-w-sm">
-                Create your first snippet to save time on repetitive text
-              </p>
+        {snippets.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 px-4">
+            <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted/60 mb-4">
+              <SquareBottomDashedScissors
+                className="w-5 h-5 text-muted-foreground/60"
+                strokeWidth={1.5}
+              />
             </div>
-          ) : (
-            <div className="rounded-xl border border-border bg-background overflow-hidden">
-              {snippets.map((snippet, index) => (
-                <div
-                  key={snippet.id}
-                  className={`group p-4 hover:bg-muted/30 transition-colors ${
-                    index !== snippets.length - 1
-                      ? 'border-b border-border'
-                      : ''
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <h3 className="text-sm font-medium text-foreground">
+            <h3 className="text-sm font-medium text-foreground mb-1">
+              No snippets yet
+            </h3>
+            <p className="text-xs text-muted-foreground text-center max-w-[260px] leading-relaxed">
+              Create your first snippet to save time on repetitive text
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {snippets.map(snippet => (
+              <div
+                key={snippet.id}
+                className="group rounded-lg border border-border bg-card px-4 py-3 hover:bg-accent/40 transition-colors"
+              >
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <code className="text-xs font-mono bg-primary/8 text-primary px-1.5 py-0.5 rounded">
                         {snippet.snippet}
-                      </h3>
-                      <span className="text-xs text-muted-foreground">→</span>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap wrap-break-words">
-                        {snippet.expansion}
-                      </p>
+                      </code>
                     </div>
+                    <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">
+                      {snippet.expansion}
+                    </p>
+                  </div>
 
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-4">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(snippet)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(snippet.id)}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => handleEdit(snippet)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => handleDelete(snippet.id)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <SnippetDialog

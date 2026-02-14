@@ -1,5 +1,6 @@
 pub mod ai_processing;
 pub mod audio;
+pub mod cache;
 pub mod clipboard;
 pub mod data;
 pub mod models;

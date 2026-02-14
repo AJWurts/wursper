@@ -17,6 +17,7 @@ pub struct TranscriptionRecord {
     pub word_count: usize,
     pub model_id: String,
     pub provider: String,
+    pub has_audio: bool,
 }
 
 /// Get the recordings directory path
@@ -143,6 +144,7 @@ pub async fn get_all_transcriptions(app: AppHandle) -> Result<Vec<TranscriptionR
                     word_count: metadata.result.split_whitespace().count(),
                     model_id: metadata.model_key.clone(),
                     provider: metadata.provider.clone(),
+                    has_audio: metadata.has_audio,
                 });
             }
             Err(e) => {
@@ -164,9 +166,8 @@ pub async fn delete_recording(app: AppHandle, timestamp: i64) -> Result<(), Stri
     let recordings_dir = get_recordings_dir(&app)?;
     let recording_folder = recordings_dir.join(timestamp.to_string());
 
-    if recording_folder.exists() {
-        fs::remove_dir_all(&recording_folder)
-            .map_err(|e| format!("Failed to delete recording: {}", e))?;
+    if crate::utils::async_fs::exists(&recording_folder).await {
+        crate::utils::async_fs::remove_dir_all(&recording_folder).await?;
     }
 
     Ok(())
@@ -180,12 +181,11 @@ pub async fn get_recording_audio_path(app: AppHandle, timestamp: i64) -> Result<
     let recordings_dir = get_recordings_dir(&app)?;
     let audio_path = recordings_dir.join(timestamp.to_string()).join("audio.wav");
 
-    if !audio_path.exists() {
+    if !crate::utils::async_fs::exists(&audio_path).await {
         return Err("Audio file not found".to_string());
     }
 
-    let audio_bytes =
-        fs::read(&audio_path).map_err(|e| format!("Failed to read audio file: {}", e))?;
+    let audio_bytes = crate::utils::async_fs::read_file(&audio_path).await?;
 
     let base64_string = base64::engine::general_purpose::STANDARD.encode(&audio_bytes);
 

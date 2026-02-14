@@ -34,14 +34,14 @@ export const VoiceInput = () => {
             active={recording.isRecording}
             audioLevel={audioLevel}
             mode="static"
-            barWidth={1.5}
-            barGap={1.5}
-            barRadius={5}
+            barWidth={3}
+            barGap={1}
+            barRadius={10}
             barColor="#ffffff"
             height={20}
-            sensitivity={1.5}
+            sensitivity={3.5}
             fadeEdges
-            fadeWidth={50}
+            fadeWidth={10}
             className="h-full w-full flex flex-1"
           />
         )}

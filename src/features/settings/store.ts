@@ -126,6 +126,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
+
+      // Rebuild tray menu to reflect the microphone change
+      await invoke('rebuild_tray_menu_command')
     } catch (error) {
       console.error('Error saving microphone device:', error)
     }

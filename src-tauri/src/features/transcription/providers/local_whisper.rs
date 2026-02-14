@@ -3,6 +3,7 @@ use tauri::{command, State};
 use tokio::sync::Mutex;
 
 use super::TranscriptionResponse;
+use crate::features::models::engines::ModelConfig;
 use crate::features::models::LocalModelManager;
 
 // TODO: This is not used anywhere, but we keep it here for reference
@@ -72,5 +73,64 @@ pub async fn transcribe_with_local_whisper(
         text,
         language,
         segments: None, // Can be enhanced later to return segment information
+    })
+}
+
+/// Transcribes audio using a specific local engine (candle, whisperkit, apple-speech)
+///
+/// This function loads the model if not already loaded with the correct engine,
+/// then transcribes the audio.
+///
+/// # Arguments
+/// * `audio_data` - Raw audio bytes in WAV format
+/// * `engine_type` - Engine to use: "candle", "whisperkit", or "apple-speech"
+/// * `model_path` - Path to the model file (optional for apple-speech)
+/// * `model_id` - Model identifier
+/// * `language` - Optional language code (e.g., "en", "es")
+/// * `state` - Shared LocalModelManager state
+pub async fn transcribe_with_local_engine(
+    audio_data: Vec<u8>,
+    engine_type: &str,
+    model_path: Option<String>,
+    model_id: Option<String>,
+    language: Option<String>,
+    state: State<'_, Arc<Mutex<LocalModelManager>>>,
+) -> Result<TranscriptionResponse, String> {
+    let mut manager = state.lock().await;
+
+    // Check if we need to load a different engine or model
+    let current_engine = manager.get_active_engine_type();
+    let needs_load = match current_engine {
+        Some(current) => current != engine_type,
+        None => true,
+    };
+
+    if needs_load {
+        // Load the model with the specified engine
+        let config = ModelConfig {
+            model_path: model_path.clone().unwrap_or_else(|| {
+                // For apple-speech, use a placeholder path
+                if engine_type == "apple-speech" {
+                    "system://apple-speech".to_string()
+                } else {
+                    String::new()
+                }
+            }),
+            model_name: model_id.clone().unwrap_or_else(|| engine_type.to_string()),
+            language: language.clone(),
+        };
+
+        manager.load_model(engine_type, config)?;
+    }
+
+    // Transcribe using the loaded engine
+    let text = manager
+        .transcribe(audio_data, language.clone())
+        .map_err(|e| e.to_string())?;
+
+    Ok(TranscriptionResponse {
+        text,
+        language,
+        segments: None,
     })
 }

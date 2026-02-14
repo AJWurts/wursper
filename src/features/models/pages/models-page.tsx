@@ -4,11 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { useModelsStore, initializeModels, type TranscriptionModel } from '..'
 import { ApiKeyModal } from '../components/api-key-modal'
-import {
-  ModelsHeader,
-  ModelsInfoBanner,
-  ModelsSearch,
-} from '../components/header'
+import { ModelsHeader, ModelsSearch } from '../components/header'
 import { ModelsTable } from '../components/table'
 import {
   downloadModel,
@@ -127,14 +123,12 @@ export function ModelsPage() {
         onSyncModels={handleSyncModels}
       />
 
-      <ModelsInfoBanner />
-
       <Tabs
         value={activeTab}
         onValueChange={v =>
           setActiveTab(v as 'speech-to-text' | 'post-processing')
         }
-        className="mt-6"
+        className="mt-2"
       >
         <div className="flex items-center justify-between">
           <TabsList>

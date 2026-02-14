@@ -5,6 +5,11 @@ import {
   checkAccessibilityPermission,
 } from 'tauri-plugin-macos-permissions-api'
 
+import {
+  checkSpeechRecognitionPermission,
+  requestSpeechRecognitionPermission,
+} from './speech-recognition-permissions'
+
 export type PermissionStatus = 'granted' | 'denied' | 'unknown'
 
 export interface Permission {
@@ -18,19 +23,22 @@ export interface Permission {
 export interface PermissionsState {
   microphone: PermissionStatus
   accessibility: PermissionStatus
+  speechRecognition: PermissionStatus
 }
 
 export async function checkAllPermissions(): Promise<PermissionsState> {
   try {
-    const [microphone, accessibility] = await Promise.all([
+    const [microphone, accessibility, speechRecognition] = await Promise.all([
       checkMicrophonePermission(),
       checkAccessibilityPermission(),
+      checkSpeechRecognitionPermission(),
     ])
 
     // Log permission status for debugging
     console.log('Permission check results:', {
       microphone,
       accessibility,
+      speechRecognition,
     })
 
     // For accessibility, check multiple times as the plugin can be unreliable
@@ -47,18 +55,28 @@ export async function checkAllPermissions(): Promise<PermissionsState> {
       }
     }
 
+    // Convert speech recognition status to our PermissionStatus type
+    const speechRecognitionStatus: PermissionStatus =
+      speechRecognition === 'authorized'
+        ? 'granted'
+        : speechRecognition === 'denied' || speechRecognition === 'restricted'
+          ? 'denied'
+          : 'unknown'
+
     // For accessibility, if check returns false, it might still be granted
     // but the plugin might not detect it correctly. We'll treat it as 'unknown'
     // so the UI can show a "Check Again" option
     return {
       microphone: microphone ? 'granted' : 'denied',
       accessibility: accessibilityStatus ? 'granted' : 'unknown',
+      speechRecognition: speechRecognitionStatus,
     }
   } catch (error) {
     console.error('Error checking permissions:', error)
     return {
       microphone: 'unknown',
       accessibility: 'unknown',
+      speechRecognition: 'unknown',
     }
   }
 }
@@ -122,10 +140,33 @@ export async function requestAccessibility(): Promise<boolean> {
   }
 }
 
+export async function requestSpeechRecognition(): Promise<boolean> {
+  try {
+    console.log('Requesting speech recognition permission...')
+
+    // First check if permission is already granted
+    const currentStatus = await checkSpeechRecognitionPermission()
+    if (currentStatus === 'authorized') {
+      console.log('Speech recognition permission already granted')
+      return true
+    }
+
+    // Request permission (this will show system dialog)
+    const status = await requestSpeechRecognitionPermission()
+    console.log('Speech recognition permission status after request:', status)
+
+    return status === 'authorized'
+  } catch (error) {
+    console.error('Error requesting speech recognition permission:', error)
+    return false
+  }
+}
+
 export function areRequiredPermissionsGranted(
   permissions: PermissionsState
 ): boolean {
   // Microphone and Accessibility are required for voice input and global shortcuts
+  // Speech recognition is only required for Apple Speech engine, so not included here
   return (
     permissions.microphone === 'granted' &&
     permissions.accessibility === 'granted'

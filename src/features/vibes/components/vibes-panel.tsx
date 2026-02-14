@@ -15,8 +15,8 @@ import superhumanIcon from '@/assets/apps/superhuman.svg'
 import telegramIcon from '@/assets/apps/telegram.svg'
 import vscodeIcon from '@/assets/apps/vscode.svg'
 import whatsappIcon from '@/assets/apps/whatsapp.svg'
-import { InfoCard } from '@/components/ui/info-card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/cn'
 
 import { useVibesStore } from '../store'
 import { AppAvatarGroup } from './app-avatar-group'
@@ -45,36 +45,34 @@ const CATEGORY_CONFIG: Record<
   }
 > = {
   personal: {
-    label: 'Personal messages',
+    label: 'Personal',
     info: {
-      title: 'This vibe applies in personal messengers',
-      subtitle:
-        'Available on desktop in English. iOS and more languages coming soon',
+      title: 'For personal messengers',
+      subtitle: 'iMessage, WhatsApp, Telegram and more',
     },
     icons: [messagesIcon, whatsappIcon, telegramIcon],
   },
   work: {
-    label: 'Work messages',
+    label: 'Work',
     info: {
-      title: 'This vibe applies in work messages',
-      subtitle:
-        'Perfect for Slack, Teams, and other professional communication tools',
+      title: 'For work communication',
+      subtitle: 'Slack, Teams, and professional tools',
     },
     icons: [slackIcon, jiraIcon, teamsIcon],
   },
   email: {
     label: 'Email',
     info: {
-      title: 'This vibe applies in email',
-      subtitle: 'Ideal for Gmail, Outlook, and other email clients',
+      title: 'For email clients',
+      subtitle: 'Gmail, Outlook, Superhuman and more',
     },
     icons: [gmailIcon, outlookIcon, superhumanIcon, appleMailIcon],
   },
   other: {
     label: 'Other',
     info: {
-      title: 'This vibe applies in other apps',
-      subtitle: 'Ideal for Google Docs, VS Code, and other apps',
+      title: 'For other apps',
+      subtitle: 'Docs, Notes, Code editors and more',
     },
     icons: [googleDocsIcon, vscodeIcon, appleNotesIcon, chatgptIcon],
   },
@@ -90,24 +88,34 @@ const getPreviewComponent = (category: VibeCategory, text: string) => {
   return previews[category]
 }
 
-function CategoryInfo({ category }: { category: VibeCategory }) {
+function CategoryInfoBanner({ category }: { category: VibeCategory }) {
   const config = CATEGORY_CONFIG[category]
   const { info, icons } = config
 
   if (!info && !icons) return null
 
   return (
-    <InfoCard variant="accent" className="flex items-start gap-4">
-      {icons && <AppAvatarGroup icons={icons} />}
-      {info && (
-        <div className="flex-1">
-          <InfoCard.Title className="text-base font-semibold mb-1">
-            {info.title}
-          </InfoCard.Title>
-          <InfoCard.Description>{info.subtitle}</InfoCard.Description>
+    <div className="relative rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden group hover:border-border/80 transition-colors">
+      {/* Gradient accent line at top - matching KPI cards */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[2px] opacity-60"
+        style={{
+          background: `linear-gradient(90deg, #4ade8000, #4ade80, #4ade8000)`,
+        }}
+      />
+
+      <div className="px-3.5 py-2.5 flex items-center gap-3">
+        {icons && <AppAvatarGroup icons={icons} />}
+        <div className="flex-1 min-w-0">
+          <h3 className="text-[12px] font-medium text-foreground">
+            {info?.title}
+          </h3>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {info?.subtitle}
+          </p>
         </div>
-      )}
-    </InfoCard>
+      </div>
+    </div>
   )
 }
 
@@ -115,12 +123,22 @@ function AddVibeButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="p-6 rounded-2xl border-2 border-dashed border-border hover:border-primary/50 transition-colors flex flex-col items-center justify-center min-h-[300px] group"
+      className={cn(
+        'group relative rounded-xl border border-dashed transition-all',
+        'border-border/40 hover:border-primary/40',
+        'flex flex-col items-center justify-center min-h-[200px]',
+        'bg-transparent hover:bg-primary/[0.02]'
+      )}
     >
-      <div className="w-16 h-16 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center mb-4 transition-colors">
-        <Plus className="w-8 h-8 text-primary" />
+      <div
+        className={cn(
+          'w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-all',
+          'bg-muted/30 group-hover:bg-primary/10 group-hover:scale-105'
+        )}
+      >
+        <Plus className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
       </div>
-      <p className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+      <p className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
         Create Custom Vibe
       </p>
     </button>
@@ -181,24 +199,51 @@ export function VibesPanel() {
       <Tabs
         value={activeTab}
         onValueChange={v => setActiveTab(v as VibeCategory)}
-        className="gap-4"
+        className="gap-3"
       >
-        <TabsList>
-          {CATEGORIES.map(category => (
-            <TabsTrigger key={category} value={category}>
-              {CATEGORY_CONFIG[category].label}
-            </TabsTrigger>
-          ))}
+        <TabsList className="bg-transparent border-b border-border/40 rounded-none p-0 h-auto gap-0">
+          {CATEGORIES.map(category => {
+            const count = vibes.filter(v => v.category === category).length
+            const isActive = activeTab === category
+            return (
+              <TabsTrigger
+                key={category}
+                value={category}
+                className={cn(
+                  'relative rounded-none border-b-2 border-transparent px-4 py-2.5',
+                  'text-[13px] font-medium transition-colors',
+                  'data-[state=active]:border-primary data-[state=active]:text-foreground',
+                  'data-[state=inactive]:text-muted-foreground hover:text-foreground',
+                  'bg-transparent data-[state=active]:bg-transparent',
+                  'shadow-none data-[state=active]:shadow-none'
+                )}
+              >
+                {CATEGORY_CONFIG[category].label}
+                <span
+                  className={cn(
+                    'ml-1.5 text-[11px] tabular-nums',
+                    isActive ? 'text-primary' : 'text-muted-foreground/60'
+                  )}
+                >
+                  {count}
+                </span>
+              </TabsTrigger>
+            )
+          })}
         </TabsList>
 
         {CATEGORIES.map(category => {
           const categoryVibes = getCategoryVibes(category)
 
           return (
-            <TabsContent key={category} value={category} className="space-y-6">
-              <CategoryInfo category={category} />
+            <TabsContent
+              key={category}
+              value={category}
+              className="space-y-4 mt-4"
+            >
+              <CategoryInfoBanner category={category} />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {categoryVibes.map(vibe => (
                   <VibeCard
                     key={vibe.id}

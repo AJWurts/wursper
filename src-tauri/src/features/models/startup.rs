@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
@@ -116,13 +115,18 @@ pub async fn auto_start_selected_models(
             format!("{} need to be downloaded", model_names)
         };
 
-        // Show notification about models needing download
-        let _ = app
-            .notification()
-            .builder()
-            .title("Models Not Downloaded")
-            .body(&format!("{}\n\nOpen Dicta > Models to download", message))
-            .show();
+        // Show toast about models needing download
+        let toast_message = if models_to_download.len() == 1 {
+            format!("Model needs download: {}", model_names)
+        } else {
+            format!("Models need download: {}", model_names)
+        };
+        let _ = crate::features::window::show_toast(
+            app,
+            &toast_message,
+            crate::features::window::ToastType::Warning,
+            1.0,
+        );
     }
 
     Ok(())

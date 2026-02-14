@@ -1,27 +1,55 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono, Playfair_Display } from 'next/font/google'
+import { DM_Sans, Instrument_Serif } from 'next/font/google'
 import './globals.css'
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+// DM Sans - Modern geometric sans-serif (similar to Satoshi)
+const dmSans = DM_Sans({
   subsets: ['latin'],
+  variable: '--font-satoshi',
+  display: 'swap',
+  weight: ['400', '500', '600', '700'],
 })
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+// Instrument Serif - Elegant display font
+const instrumentSerif = Instrument_Serif({
   subsets: ['latin'],
-})
-
-const playfair = Playfair_Display({
-  variable: '--font-playfair',
-  subsets: ['latin'],
-  style: ['italic'],
+  variable: '--font-instrument',
+  display: 'swap',
+  weight: '400',
+  style: ['normal', 'italic'],
 })
 
 export const metadata: Metadata = {
-  title: 'Dicta - Voice to Text AI for macOS',
+  title: 'Dicta — Voice to Text AI for macOS',
   description:
-    'Open source voice-to-text AI that turns speech into clear, polished writing. Free forever, privacy-focused, works system-wide on macOS.',
+    'Transform your voice into polished text instantly. Open source, offline-first, and 100% private. The AI-powered dictation app that respects your privacy.',
+  keywords: [
+    'voice to text',
+    'speech recognition',
+    'dictation',
+    'macOS',
+    'AI',
+    'Whisper',
+    'offline',
+    'privacy',
+    'open source',
+  ],
+  authors: [{ name: 'Nitin Panwar', url: 'https://github.com/nitintf' }],
+  openGraph: {
+    title: 'Dicta — Voice to Text AI for macOS',
+    description:
+      'Transform your voice into polished text instantly. Open source, offline-first, and 100% private.',
+    url: 'https://dicta.app',
+    siteName: 'Dicta',
+    type: 'website',
+    locale: 'en_US',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Dicta — Voice to Text AI for macOS',
+    description:
+      'Transform your voice into polished text instantly. Open source, offline-first, and 100% private.',
+  },
   icons: {
     icon: '/icon.png',
     apple: '/icon.png',
@@ -34,10 +62,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased`}
+        className={`${dmSans.variable} ${instrumentSerif.variable} font-sans antialiased`}
       >
+        {/* Noise texture overlay */}
+        <div className="noise-overlay" aria-hidden="true" />
         {children}
       </body>
     </html>

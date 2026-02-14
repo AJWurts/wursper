@@ -9,24 +9,36 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAudioDevices } from '@/hooks/use-audio-devices'
+import { useAudioRecording } from '@/hooks/use-audio-recording'
 
 import { useSettingsStore } from '../store'
 
 export function MicrophoneSelector() {
   const { devices } = useAudioDevices()
   const { settings, setMicrophoneDevice } = useSettingsStore()
+  const { isActive: isRecordingActive } = useAudioRecording()
   const selectedDeviceId = settings.voiceInput.microphoneDeviceId
 
   const handleSelectDevice = async (deviceId: string) => {
+    // Don't allow changes while recording is active
+    if (isRecordingActive) return
     await setMicrophoneDevice(deviceId === 'auto-detect' ? null : deviceId)
   }
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="gap-2 max-w-[300px]">
+      <DropdownMenuTrigger asChild disabled={isRecordingActive}>
+        <Button
+          variant="outline"
+          className="gap-2 max-w-[300px]"
+          disabled={isRecordingActive}
+        >
           <Mic className="h-4 w-4 shrink-0" />
-          <span className="truncate">Select microphone</span>
+          <span className="truncate">
+            {isRecordingActive
+              ? 'Recording in progress...'
+              : 'Select microphone'}
+          </span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[300px]">

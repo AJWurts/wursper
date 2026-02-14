@@ -1,6 +1,5 @@
 import { LaunchAtStartup } from '../launch-at-startup'
 import { SaveAudioRecordings } from '../save-audio-recordings'
-import { ShowInDock } from '../show-in-dock'
 import { SettingsPanel, SettingItem, SettingsSection } from './settings-panel'
 
 export function SystemPanel() {
@@ -14,12 +13,6 @@ export function SystemPanel() {
           title="Launch at startup"
           description="Automatically launch Dicta when you log in"
           action={<LaunchAtStartup />}
-        />
-
-        <SettingItem
-          title="Show app in dock"
-          description="Display Dicta icon in the macOS dock"
-          action={<ShowInDock />}
         />
 
         <SettingItem

@@ -1,6 +1,6 @@
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { CircleCheck, CircleX, Info, TriangleAlert } from 'lucide-react'
-import { StrictMode, useEffect, useRef, useState } from 'react'
+import { StrictMode, useCallback, useEffect, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 
 import { useTauriEvent } from './hooks/use-tauri-event'
@@ -12,130 +12,140 @@ interface ToastMessage {
   type?: 'info' | 'success' | 'error' | 'warning'
 }
 
+const TOAST_DURATION = 2500 // ms
+
 function ToastWindowApp() {
   const [message, setMessage] = useState<string>('')
   const [type, setType] = useState<'info' | 'success' | 'error' | 'warning'>(
     'info'
   )
-  const [visible, setVisible] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
   const [progress, setProgress] = useState(100)
-  const [toastKey, setToastKey] = useState(0) // Add key to track different toasts
-  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const windowRef = useRef(getCurrentWebviewWindow())
+  const animationFrameRef = useRef<number | null>(null)
+  const startTimeRef = useRef<number | null>(null)
+  const isHidingRef = useRef(false)
 
-  // Cleanup function
-  const cleanup = () => {
-    if (hideTimeoutRef.current) {
-      clearTimeout(hideTimeoutRef.current)
-      hideTimeoutRef.current = null
+  const hideToast = useCallback(async () => {
+    if (isHidingRef.current) return
+    isHidingRef.current = true
+
+    // Cancel any ongoing animation
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
     }
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current)
-      progressIntervalRef.current = null
+
+    setIsVisible(false)
+    await windowRef.current.hide()
+    setProgress(100)
+    startTimeRef.current = null
+    isHidingRef.current = false
+  }, [])
+
+  const startProgressAnimation = useCallback(() => {
+    startTimeRef.current = performance.now()
+
+    const animate = (currentTime: number) => {
+      if (!startTimeRef.current) return
+
+      const elapsed = currentTime - startTimeRef.current
+      const remaining = Math.max(0, 100 - (elapsed / TOAST_DURATION) * 100)
+
+      setProgress(remaining)
+
+      if (remaining > 0) {
+        animationFrameRef.current = requestAnimationFrame(animate)
+      } else {
+        // Progress complete, hide the toast
+        hideToast()
+      }
     }
-  }
+
+    animationFrameRef.current = requestAnimationFrame(animate)
+  }, [hideToast])
 
   useTauriEvent<ToastMessage>('show_toast', async event => {
-    // Cleanup any existing timers
-    cleanup()
+    // Cancel any existing animation
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
 
-    // Reset state completely for new toast
-    setToastKey(prev => prev + 1)
+    // Reset state
+    isHidingRef.current = false
     setMessage(event.payload.message)
     setType(event.payload.type || 'info')
     setProgress(100)
-    setVisible(true)
+    setIsVisible(true)
 
+    // Show the window first
     await windowRef.current.show()
 
-    // Start progress bar animation
-    const duration = 3000
-    const interval = 16 // ~60fps
-    const decrement = (100 / duration) * interval
-
-    progressIntervalRef.current = setInterval(() => {
-      setProgress(prev => {
-        const newProgress = prev - decrement
-        if (newProgress <= 0) {
-          if (progressIntervalRef.current) {
-            clearInterval(progressIntervalRef.current)
-            progressIntervalRef.current = null
-          }
-          return 0
-        }
-        return newProgress
-      })
-    }, interval)
+    // Small delay to ensure render, then start animation
+    requestAnimationFrame(() => {
+      startProgressAnimation()
+    })
   })
 
-  useTauriEvent<void>('hide_toast', async () => {
-    cleanup()
-    setVisible(false)
-    setProgress(100) // Reset progress
-    await windowRef.current.hide()
+  useTauriEvent<void>('hide_toast', () => {
+    hideToast()
   })
 
-  // Hide window when progress reaches 0
-  useEffect(() => {
-    if (progress === 0 && visible) {
-      const timer = setTimeout(async () => {
-        setVisible(false)
-        await windowRef.current.hide()
-        // Reset progress after hiding
-        setTimeout(() => setProgress(100), 300)
-      }, 200)
-
-      return () => clearTimeout(timer)
-    }
-  }, [progress, visible])
-
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current)
-      }
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current)
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
       }
     }
   }, [])
 
   const getIcon = () => {
-    const iconClass = 'w-5 h-5 flex-shrink-0'
+    const iconClass = 'w-4 h-4 flex-shrink-0'
     switch (type) {
       case 'success':
-        return <CircleCheck className={`${iconClass} text-emerald-500`} />
+        return <CircleCheck className={`${iconClass} text-emerald-400`} />
       case 'error':
-        return <CircleX className={`${iconClass} text-red-500`} />
+        return <CircleX className={`${iconClass} text-red-400`} />
       case 'warning':
-        return <TriangleAlert className={`${iconClass} text-amber-500`} />
+        return <TriangleAlert className={`${iconClass} text-amber-400`} />
       default:
-        return <Info className={`${iconClass} text-blue-500`} />
+        return <Info className={`${iconClass} text-blue-400`} />
     }
   }
 
-  if (!visible) return null
+  const getProgressColor = () => {
+    switch (type) {
+      case 'success':
+        return 'bg-emerald-400'
+      case 'error':
+        return 'bg-red-400'
+      case 'warning':
+        return 'bg-amber-400'
+      default:
+        return 'bg-blue-400'
+    }
+  }
+
+  if (!isVisible) return null
 
   return (
-    <div
-      key={toastKey}
-      className="w-full relative h-full flex flex-col bg-linear-to-br from-black via-neutral-950 to-black rounded-lg border shadow-lg overflow-hidden border-zinc-700"
-    >
-      <div className="flex-1 flex items-center justify-between px-4 py-3 gap-3">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          {getIcon()}
-          <p className="text-sm font-medium text-white flex-1 truncate">
-            {message}
-          </p>
-        </div>
-
-        <div className="w-full h-1 bg-transparent overflow-hidden absolute bottom-0 left-0">
-          <div
-            className="h-full bg-primary transition-all duration-75 ease-linear"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+    <div className="w-full h-full flex flex-col bg-black/90 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden shadow-2xl animate-in slide-in-from-bottom-2 fade-in duration-200">
+      <div className="flex-1 flex items-center px-4 gap-3 min-w-0">
+        <div className="flex-shrink-0">{getIcon()}</div>
+        <p className="text-[12px] leading-tight font-medium text-white/90 line-clamp-2 min-w-0 flex-1">
+          {message}
+        </p>
+      </div>
+      <div className="w-full h-[2px] bg-white/5 flex-shrink-0">
+        <div
+          className={`h-full ${getProgressColor()}`}
+          style={{
+            width: `${progress}%`,
+            transition: 'none', // Use RAF for smooth animation, not CSS transitions
+          }}
+        />
       </div>
     </div>
   )

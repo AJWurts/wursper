@@ -33,7 +33,7 @@ export const defaultSettings: Settings = {
     globalShortcutsEnabled: true,
   },
   system: {
-    showInDock: true,
+    showInDock: false,
     saveAudioRecordings: false,
     playSoundOnRecording: true,
   },

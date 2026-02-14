@@ -75,12 +75,20 @@ pub async fn transcribe_and_process(
     if is_audio_silent(&request.audio_data)? {
         logger::debug("Audio is silent, skipping transcription");
 
+        // Show toast for silent audio
+        let _ = crate::features::window::show_toast(
+            &app,
+            "No speech detected",
+            crate::features::window::ToastType::Info,
+            1.0,
+        );
+
         // Clean up the recording folder since audio is silent
         let recordings_dir = crate::features::recordings::get_recordings_dir(&app)?;
         let recording_folder = recordings_dir.join(request.timestamp.to_string());
 
-        if recording_folder.exists() {
-            if let Err(e) = std::fs::remove_dir_all(&recording_folder) {
+        if crate::utils::async_fs::exists(&recording_folder).await {
+            if let Err(e) = crate::utils::async_fs::remove_dir_all(&recording_folder).await {
                 log::warn!(
                     "Failed to cleanup recording folder after silent audio detection: {}",
                     e
@@ -114,7 +122,7 @@ pub async fn transcribe_and_process(
     let recording_folder = recordings_dir.join(request.timestamp.to_string());
 
     // Verify the folder exists (it should have been created during recording)
-    if !recording_folder.exists() {
+    if !crate::utils::async_fs::exists(&recording_folder).await {
         return Err(format!(
             "Recording folder does not exist: {}",
             recording_folder.display()
@@ -128,6 +136,9 @@ pub async fn transcribe_and_process(
         .and_then(|a| a.get("enabled"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+
+    // Track if we showed a warning/error toast (to skip success toast later)
+    let mut showed_warning_toast = false;
 
     let (
         final_text,
@@ -159,14 +170,14 @@ pub async fn transcribe_and_process(
                     e
                 ));
 
-                // Show notification to user
-                use tauri_plugin_notification::NotificationExt;
-                let _ = app
-                    .notification()
-                    .builder()
-                    .title("Post-processing Skipped")
-                    .body("No post-processing model selected. Go to Models to select one.")
-                    .show();
+                // Show toast to user (warning takes precedence over success)
+                let _ = crate::features::window::show_toast(
+                    &app,
+                    "Post-processing skipped: No model selected",
+                    crate::features::window::ToastType::Warning,
+                    1.0,
+                );
+                showed_warning_toast = true;
 
                 // Use raw transcription
                 (
@@ -201,7 +212,31 @@ pub async fn transcribe_and_process(
     // Step 9: Determine app category
     let app_category = categorize_app(&focused_app.name);
 
-    // Step 10: Create comprehensive metadata
+    // Step 10: Check if audio recordings should be saved
+    let save_audio_recordings = settings
+        .get("system")
+        .and_then(|s| s.get("saveAudioRecordings"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    // Step 11: Handle audio file based on setting
+    let audio_path = recording_folder.join("audio.wav");
+    let has_audio = if save_audio_recordings {
+        // Audio file exists (was created during recording)
+        crate::utils::async_fs::exists(&audio_path).await
+    } else {
+        // Delete the audio file if save is disabled
+        if crate::utils::async_fs::exists(&audio_path).await {
+            if let Err(e) = crate::utils::async_fs::remove_file(&audio_path).await {
+                logger::warn(&format!("Failed to delete audio file: {}", e));
+            } else {
+                logger::debug("Audio file deleted (saveAudioRecordings disabled)");
+            }
+        }
+        false
+    };
+
+    // Step 12: Create comprehensive metadata
     let metadata = RecordingMetadata::new(
         raw_transcription.clone(),
         final_text.clone(),
@@ -225,12 +260,23 @@ pub async fn transcribe_and_process(
         style_applied,
         style_category,
         prompt_context,
+        has_audio,
     );
 
-    // Step 11: Save metadata
+    // Step 13: Save metadata
     save_metadata(&recording_folder, &metadata)?;
 
-    // Step 12: Handle auto-paste/copy
+    // Step 14: Show success toast (with probability) - skip if warning was shown
+    if !showed_warning_toast {
+        let _ = crate::features::window::show_toast(
+            &app,
+            "Transcription saved",
+            crate::features::window::ToastType::Success,
+            0.4,
+        );
+    }
+
+    // Step 16: Handle auto-paste/copy
     let auto_paste = settings
         .get("transcription")
         .and_then(|t| t.get("autoPaste"))
@@ -257,7 +303,7 @@ pub async fn transcribe_and_process(
         }
     }
 
-    // Step 13: Emit events for UI updates
+    // Step 17: Emit events for UI updates
     app.emit("transcriptions-changed", ())
         .map_err(|e| format!("Failed to emit sync event: {}", e))?;
 
@@ -448,6 +494,42 @@ async fn transcribe_with_provider(
                 api_key,
                 Some(model.id.clone()),
                 None, // language
+            )
+            .await?
+        }
+        // Candle engine (Pure Rust with Metal GPU)
+        "candle" => {
+            local_whisper::transcribe_with_local_engine(
+                audio_data,
+                "candle",
+                model.path.clone(),
+                Some(model.id.clone()),
+                language.clone(),
+                local_model_state,
+            )
+            .await?
+        }
+        // WhisperKit engine (CoreML/Neural Engine)
+        "whisperkit" => {
+            local_whisper::transcribe_with_local_engine(
+                audio_data,
+                "whisperkit",
+                model.path.clone(),
+                Some(model.id.clone()),
+                language.clone(),
+                local_model_state,
+            )
+            .await?
+        }
+        // Apple Speech Recognition (built-in macOS)
+        "apple-speech" => {
+            local_whisper::transcribe_with_local_engine(
+                audio_data,
+                "apple-speech",
+                model.path.clone(),
+                Some(model.id.clone()),
+                language.clone(),
+                local_model_state,
             )
             .await?
         }

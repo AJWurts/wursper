@@ -15,5 +15,10 @@ export interface TranscriptionsStore {
     totalTranscriptions: number
     totalWords: number
     todayCount: number
+    todayWords: number
+    totalDuration: number
+    wordsPerMinute: number
+    timeSavedMinutes: number
+    avgWordsPerTranscription: number
   }
 }

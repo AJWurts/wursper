@@ -53,7 +53,7 @@ export function ModelInfoTooltip({ capabilities }: ModelInfoTooltipProps) {
       </TooltipTrigger>
       <TooltipContent
         side="right"
-        className="w-72 p-4 bg-muted/95 border border-border shadow-lg"
+        className="w-72 p-4 bg-popover border border-border shadow-xl backdrop-blur-none"
         sideOffset={8}
         showArrow={false}
       >

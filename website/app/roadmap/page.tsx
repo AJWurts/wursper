@@ -9,7 +9,7 @@ export default function RoadmapPage() {
         <h1 className="text-4xl font-bold mb-8">Roadmap</h1>
         <div className="space-y-8">
           <p className="text-muted-foreground">
-            See what we're working on and what's coming next for Dicta.
+            See what we&apos;re working on and what&apos;s coming next for Dicta.
           </p>
           {/* Roadmap content will go here */}
         </div>

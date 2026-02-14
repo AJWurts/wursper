@@ -13,12 +13,20 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes
 }
 
-export function useAudioPath(timestamp: number) {
+export function useAudioPath(timestamp: number | null) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // If no timestamp provided, skip loading
+    if (timestamp === null) {
+      setAudioUrl(null)
+      setIsLoading(false)
+      setError(null)
+      return
+    }
+
     let cancelled = false
     let objectUrl: string | null = null
 

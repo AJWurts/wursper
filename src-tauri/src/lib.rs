@@ -11,11 +11,16 @@ mod menu;
 mod types;
 mod utils;
 
+#[cfg(target_os = "macos")]
+use commands::{check_speech_recognition_permission, request_speech_recognition_permission};
+use menu::rebuild_tray_menu_command;
+
 use features::ai_processing::post_process_transcript;
 use features::audio::{
     cancel_recording, enumerate_audio_devices, get_recording_state, start_recording,
     stop_recording, AudioRecorder, RecordingStateManager,
 };
+use features::cache::SettingsCache;
 use features::data::{export_all_data, import_all_data, import_from_json};
 use features::models::{
     auto_start_selected_models, delete_local_model, download_local_model, get_all_models,
@@ -40,15 +45,13 @@ pub const SPOTLIGHT_LABEL: &str = "voice-input";
 
 #[cfg(target_os = "macos")]
 #[tauri::command]
-fn set_show_in_dock(app: tauri::AppHandle, show: bool) -> Result<(), String> {
-    let policy = if show {
-        ActivationPolicy::Regular
-    } else {
-        ActivationPolicy::Accessory
-    };
-
-    app.set_activation_policy(policy)
-        .map_err(|e| format!("Failed to set activation policy: {}", e))?;
+fn set_show_in_dock(_app: tauri::AppHandle, _show: bool) -> Result<(), String> {
+    // Always use Accessory mode to ensure voice input pill works on:
+    // - Full-screen apps
+    // - All monitors/screens
+    // - All desktop spaces
+    // This means the app never shows in the dock, which is typical for menubar apps
+    log::info!("set_show_in_dock called but app always runs in Accessory mode");
     Ok(())
 }
 
@@ -67,12 +70,16 @@ pub fn run() {
     let recording_state_manager = Arc::new(RecordingStateManager::new());
     let recording_shortcut_handler = Arc::new(RecordingShortcutHandler::new());
 
+    // Settings cache for reducing disk I/O
+    let settings_cache = Arc::new(SettingsCache::new());
+
     let mut builder = tauri::Builder::default()
         .manage(local_model_manager)
         .manage(shortcut_manager)
         .manage(audio_recorder)
         .manage(recording_state_manager)
         .manage(recording_shortcut_handler)
+        .manage(settings_cache)
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_os::init())
@@ -169,28 +176,22 @@ pub fn run() {
             .store("settings")
             .map_err(|e| format!("Failed to get settings store: {}", e))?;
 
-        let show_in_dock = if let Some(settings) = store.get("settings") {
-            settings
-                .get("system")
-                .and_then(|sys| sys.get("showInDock"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true)
-        } else {
-            true // Default to showing in dock if no settings found
-        };
+        // Initialize settings cache
+        if let Some(cache) = app.try_state::<Arc<SettingsCache>>() {
+            if let Err(e) = cache.initialize(&app.handle()) {
+                log::warn!("Failed to initialize settings cache: {}", e);
+            } else {
+                log::debug!("Settings cache initialized successfully");
+            }
+        }
 
-        let policy = if show_in_dock {
-            ActivationPolicy::Regular
-        } else {
-            ActivationPolicy::Accessory
-        };
-
-        app.set_activation_policy(policy);
-
-        logger::info(&format!(
-            "Applied dock setting from store: show_in_dock={}",
-            show_in_dock
-        ));
+        // Always use Accessory mode to ensure voice input pill works on:
+        // - Full-screen apps
+        // - All monitors/screens
+        // - All desktop spaces
+        // This means the app never shows in the dock (menubar app behavior)
+        app.set_activation_policy(ActivationPolicy::Accessory);
+        logger::info("App running in Accessory mode (no dock icon)");
 
         // Check onboarding completion status
         let onboarding_complete = if let Some(settings) = store.get("settings") {
@@ -237,6 +238,10 @@ pub fn run() {
 
         features::window::setup_pill_window(&handle)?;
         features::window::setup_toast_window(&handle)?;
+
+        // Start pill window position monitor (tracks screen changes)
+        #[cfg(target_os = "macos")]
+        features::window::start_pill_window_monitor(handle.clone());
 
         features::shortcuts::register_voice_input_shortcut(app)?;
 
@@ -328,6 +333,13 @@ pub fn run() {
             import_from_json,
             // Haptic feedback
             utils::haptic::trigger_haptic_feedback,
+            // Tray menu
+            rebuild_tray_menu_command,
+            // Speech recognition permissions (macOS)
+            #[cfg(target_os = "macos")]
+            check_speech_recognition_permission,
+            #[cfg(target_os = "macos")]
+            request_speech_recognition_permission,
         ])
         .setup(setup_fn)
         .build(tauri::generate_context!())

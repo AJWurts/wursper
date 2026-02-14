@@ -34,13 +34,14 @@ pub async fn enumerate_audio_devices() -> Result<Vec<AudioDevice>, String> {
 
 #[cfg(target_os = "macos")]
 async fn enumerate_macos_audio_devices() -> Result<Vec<AudioDevice>, String> {
-    use std::process::Command;
+    use tokio::process::Command;
 
-    // Use system_profiler to get audio device information
+    // Use system_profiler to get audio device information (async)
     let output = Command::new("system_profiler")
         .arg("SPAudioDataType")
         .arg("-json")
         .output()
+        .await
         .map_err(|e| format!("Failed to execute system_profiler: {}", e))?;
 
     if !output.status.success() {

@@ -1,4 +1,4 @@
-import { Cloud, FileText, Check } from 'lucide-react'
+import { Cloud, HardDrive } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 
@@ -18,9 +18,16 @@ export function ModelsHeader({
   onSyncModels,
 }: ModelsHeaderProps) {
   return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-3xl font-bold text-foreground">Models</h1>
+    <div className="mb-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-medium tracking-tight text-foreground">
+            Models
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1.5">
+            Configure speech-to-text and post-processing engines.
+          </p>
+        </div>
         {import.meta.env.DEV && onSyncModels && (
           <Button
             variant="outline"
@@ -33,40 +40,21 @@ export function ModelsHeader({
         )}
       </div>
 
-      <div className="flex items-center gap-6 text-sm">
-        <StatItem
-          icon={Cloud}
-          color="text-blue-500"
-          label={`${cloudModelsCount} cloud models`}
-        />
-        <StatItem
-          icon={FileText}
-          color="text-primary"
-          label={`${localModelsCount} local models`}
-        />
+      <div className="flex items-center gap-4 mt-4">
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/60 px-2 py-1 rounded">
+          <Cloud className="w-3 h-3" strokeWidth={1.75} />
+          {cloudModelsCount} cloud
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/60 px-2 py-1 rounded">
+          <HardDrive className="w-3 h-3" strokeWidth={1.75} />
+          {localModelsCount} local
+        </span>
         {selectedModel && (
-          <StatItem
-            icon={Check}
-            color="text-green-500"
-            label={`Using ${selectedModel.name}`}
-          />
+          <span className="inline-flex items-center gap-1.5 text-xs text-primary bg-primary/8 px-2 py-1 rounded font-medium">
+            Active: {selectedModel.name}
+          </span>
         )}
       </div>
-    </div>
-  )
-}
-
-interface StatItemProps {
-  icon: React.ComponentType<{ className?: string }>
-  color: string
-  label: string
-}
-
-function StatItem({ icon: Icon, color, label }: StatItemProps) {
-  return (
-    <div className="flex items-center gap-2">
-      <Icon className={`w-4 h-4 ${color}`} />
-      <span className="text-muted-foreground">{label}</span>
     </div>
   )
 }

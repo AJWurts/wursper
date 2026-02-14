@@ -1,7 +1,6 @@
 use super::player::{play_error_sound, play_recording_start_sound, play_recording_stop_sound};
 use super::recorder::AudioRecorder;
 use super::state::{RecordingState, RecordingStateManager};
-use crate::features::recordings::get_recordings_dir;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tauri::{command, AppHandle, Emitter, Manager, State};
@@ -26,6 +25,11 @@ pub async fn start_recording(
 ) -> Result<RecordingResponse, String> {
     log::info!("Start recording command called");
 
+    // Hide any existing toast window immediately
+    if let Err(e) = crate::features::window::toast_window::hide_toast(&app) {
+        log::warn!("Failed to hide toast: {}", e);
+    }
+
     // Check if already recording
     if state_manager.is_recording() {
         log::warn!("Already recording");
@@ -49,27 +53,39 @@ pub async fn start_recording(
         });
     }
 
-    let store = app
-        .store("settings")
-        .map_err(|e| format!("Failed to get settings: {}", e))?;
+    // Get settings from cache (faster) with fallback to direct store access
+    let (device_id, play_sound) = if let Some(cache) =
+        app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>()
+    {
+        (
+            cache.get_microphone_device_id(),
+            cache.get_play_sound_on_recording().unwrap_or(true),
+        )
+    } else {
+        // Fallback to direct store access if cache not available
+        let store = app
+            .store("settings")
+            .map_err(|e| format!("Failed to get settings: {}", e))?;
+        let settings = store.get("settings");
 
-    let settings = store.get("settings");
+        let device_id = settings
+            .as_ref()
+            .and_then(|s| s.as_object())
+            .and_then(|obj| obj.get("voiceInput").and_then(|v| v.as_object()))
+            .and_then(|obj| obj.get("microphoneDeviceId"))
+            .and_then(|d| d.as_str())
+            .map(String::from);
 
-    let device_id = settings
-        .as_ref()
-        .and_then(|s| s.as_object())
-        .and_then(|settings_obj| settings_obj.get("voiceInput").and_then(|v| v.as_object()))
-        .and_then(|voice_input_obj| voice_input_obj.get("microphoneDeviceId"))
-        .and_then(|d| d.as_str())
-        .map(String::from);
+        let play_sound = settings
+            .as_ref()
+            .and_then(|s| s.as_object())
+            .and_then(|obj| obj.get("system").and_then(|sys| sys.as_object()))
+            .and_then(|obj| obj.get("playSoundOnRecording"))
+            .and_then(|p| p.as_bool())
+            .unwrap_or(true);
 
-    let play_sound = settings
-        .as_ref()
-        .and_then(|s| s.as_object())
-        .and_then(|settings_obj| settings_obj.get("system").and_then(|sys| sys.as_object()))
-        .and_then(|system_obj| system_obj.get("playSoundOnRecording"))
-        .and_then(|p| p.as_bool())
-        .unwrap_or(true);
+        (device_id, play_sound)
+    };
 
     // Transition to Starting state
     state_manager
@@ -99,6 +115,22 @@ pub async fn start_recording(
     // Set app handle for emitting audio levels
     recorder_guard.set_app_handle(app.clone());
 
+    // Show window BEFORE starting recording so it appears immediately
+    // This ensures the window is visible even if the recording start is delayed (e.g., external microphone)
+    if let Some(window) = app.get_webview_window("voice-input") {
+        // Position window on the screen where the mouse cursor is
+        #[cfg(target_os = "macos")]
+        {
+            if let Err(e) = crate::features::window::position_pill_window_on_current_screen(&app) {
+                log::warn!("Failed to position pill window: {:?}", e);
+            }
+        }
+
+        let _ = window.show();
+        // Don't steal focus - keep user focused on their active application
+        log::info!("Voice input window shown before recording start");
+    }
+
     match recorder_guard.start_recording(&file_path, device_id) {
         Ok(_) => {
             state_manager
@@ -107,10 +139,9 @@ pub async fn start_recording(
 
             let _ = app.emit("recording-state-changed", RecordingState::Recording);
 
-            if let Some(window) = app.get_webview_window("voice-input") {
-                let _ = window.show();
-                // Don't steal focus - keep user focused on their active application
-            }
+            // Enable active pill window monitoring during recording
+            #[cfg(target_os = "macos")]
+            crate::features::window::set_pill_monitor_active(true);
 
             // Register Escape shortcut for canceling recording
             if app
@@ -198,15 +229,22 @@ pub async fn stop_recording(
         });
     }
 
-    let store = app.store("settings").map_err(|e| e.to_string())?;
-    let settings = store.get("settings");
-    let play_sound = settings
-        .as_ref()
-        .and_then(|s| s.as_object())
-        .and_then(|settings_obj| settings_obj.get("system").and_then(|sys| sys.as_object()))
-        .and_then(|system_obj| system_obj.get("playSoundOnRecording"))
-        .and_then(|p| p.as_bool())
-        .unwrap_or(true);
+    // Get play sound setting from cache (faster) with fallback
+    let play_sound = if let Some(cache) =
+        app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>()
+    {
+        cache.get_play_sound_on_recording().unwrap_or(true)
+    } else {
+        let store = app.store("settings").map_err(|e| e.to_string())?;
+        let settings = store.get("settings");
+        settings
+            .as_ref()
+            .and_then(|s| s.as_object())
+            .and_then(|obj| obj.get("system").and_then(|sys| sys.as_object()))
+            .and_then(|obj| obj.get("playSoundOnRecording"))
+            .and_then(|p| p.as_bool())
+            .unwrap_or(true)
+    };
 
     // Transition to Stopping state
     state_manager
@@ -278,7 +316,7 @@ pub async fn stop_recording(
                         ((end_time - start) as f64) / 1000.0
                     });
 
-                    match std::fs::read(&audio_path_clone) {
+                    match crate::utils::async_fs::read_file(&audio_path_clone).await {
                         Ok(audio_data) => {
                             let request =
                                 crate::features::transcription::orchestrator::TranscribeRequest {
@@ -305,10 +343,18 @@ pub async fn stop_recording(
                                     Err(e) => {
                                         log::error!("Transcription failed: {}", e);
 
+                                        // Show error toast
+                                        let _ = crate::features::window::show_toast(
+                                            &app_clone,
+                                            &format!("Transcription failed: {}", e),
+                                            crate::features::window::ToastType::Error,
+                                            1.0, // Always show errors
+                                        );
+
                                         // Clean up the recording folder since transcription failed
                                         if let Some(parent) = audio_path_clone.parent() {
-                                            if parent.exists() {
-                                                if let Err(cleanup_err) = std::fs::remove_dir_all(parent) {
+                                            if crate::utils::async_fs::exists(parent).await {
+                                                if let Err(cleanup_err) = crate::utils::async_fs::remove_dir_all(parent).await {
                                                     log::warn!("Failed to cleanup recording folder after transcription error: {}", cleanup_err);
                                                 } else {
                                                     log::info!("Cleaned up recording folder after transcription failure");
@@ -326,10 +372,20 @@ pub async fn stop_recording(
                         Err(e) => {
                             log::error!("Failed to read audio file: {}", e);
 
+                            // Show error toast
+                            let _ = crate::features::window::show_toast(
+                                &app_clone,
+                                "Failed to read audio file",
+                                crate::features::window::ToastType::Error,
+                                1.0, // Always show errors
+                            );
+
                             // Clean up the recording folder since we couldn't read the audio
                             if let Some(parent) = audio_path_clone.parent() {
-                                if parent.exists() {
-                                    if let Err(cleanup_err) = std::fs::remove_dir_all(parent) {
+                                if crate::utils::async_fs::exists(parent).await {
+                                    if let Err(cleanup_err) =
+                                        crate::utils::async_fs::remove_dir_all(parent).await
+                                    {
                                         log::warn!("Failed to cleanup recording folder after read error: {}", cleanup_err);
                                     } else {
                                         log::info!(
@@ -359,6 +415,10 @@ pub async fn stop_recording(
                     if let Some(window) = app_clone.get_webview_window("voice-input") {
                         let _ = window.hide();
                     }
+
+                    // Disable active pill window monitoring when not recording
+                    #[cfg(target_os = "macos")]
+                    crate::features::window::set_pill_monitor_active(false);
                 });
             }
 
@@ -402,6 +462,14 @@ pub async fn stop_recording(
 
             let _ = app.emit("recording-state-changed", RecordingState::Error);
 
+            // Show error toast (always show errors)
+            let _ = crate::features::window::show_toast(
+                &app,
+                &format!("Recording failed: {}", e),
+                crate::features::window::ToastType::Error,
+                1.0, // Always show errors
+            );
+
             // Unregister Escape shortcut on error
             if app
                 .try_state::<crate::features::shortcuts::ShortcutManager>()
@@ -425,6 +493,10 @@ pub async fn stop_recording(
             if let Some(window) = app.get_webview_window("voice-input") {
                 let _ = window.hide();
             }
+
+            // Disable active pill window monitoring on error
+            #[cfg(target_os = "macos")]
+            crate::features::window::set_pill_monitor_active(false);
 
             Err(e)
         }
@@ -486,6 +558,10 @@ pub async fn cancel_recording(
 
     let _ = app.emit("recording-state-changed", RecordingState::Idle);
 
+    // Disable active pill window monitoring when not recording
+    #[cfg(target_os = "macos")]
+    crate::features::window::set_pill_monitor_active(false);
+
     // Unregister Escape shortcut
     if app
         .try_state::<crate::features::shortcuts::ShortcutManager>()
@@ -506,19 +582,34 @@ pub async fn cancel_recording(
         log::warn!("ShortcutManager not available, cannot unregister Escape");
     }
 
-    let store = app.store("settings").ok();
-    let settings = store.as_ref().and_then(|s| s.get("settings"));
-    let play_sound = settings
-        .as_ref()
-        .and_then(|s| s.as_object())
-        .and_then(|settings_obj| settings_obj.get("system").and_then(|sys| sys.as_object()))
-        .and_then(|system_obj| system_obj.get("playSoundOnRecording"))
-        .and_then(|p| p.as_bool())
-        .unwrap_or(true);
+    // Get play sound setting from cache (faster) with fallback
+    let play_sound = if let Some(cache) =
+        app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>()
+    {
+        cache.get_play_sound_on_recording().unwrap_or(true)
+    } else {
+        let store = app.store("settings").ok();
+        let settings = store.as_ref().and_then(|s| s.get("settings"));
+        settings
+            .as_ref()
+            .and_then(|s| s.as_object())
+            .and_then(|obj| obj.get("system").and_then(|sys| sys.as_object()))
+            .and_then(|obj| obj.get("playSoundOnRecording"))
+            .and_then(|p| p.as_bool())
+            .unwrap_or(true)
+    };
 
     if play_sound {
         let _ = play_error_sound();
     }
+
+    // Show toast notification for cancelled recording (always show)
+    let _ = crate::features::window::show_toast(
+        &app,
+        "Recording cancelled",
+        crate::features::window::ToastType::Info,
+        1.0,
+    );
 
     let app_clone = app.clone();
     tokio::spawn(async move {

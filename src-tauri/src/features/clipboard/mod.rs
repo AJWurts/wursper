@@ -2,10 +2,13 @@ use crate::utils::logger;
 use tauri::command;
 
 #[cfg(target_os = "macos")]
-use std::process::Command;
+use tokio::process::Command;
 
 #[cfg(target_os = "macos")]
 use serde::{Deserialize, Serialize};
+
+#[cfg(target_os = "macos")]
+use std::process::Stdio;
 
 use ts_rs::TS;
 
@@ -39,6 +42,7 @@ pub async fn get_focused_app() -> Result<FocusedApp, String> {
             .arg("-e")
             .arg(script)
             .output()
+            .await
             .map_err(|e| format!("Failed to get focused app: {}", e))?;
 
         let result = String::from_utf8_lossy(&output.stdout);
@@ -82,68 +86,56 @@ pub async fn copy_and_paste(text: String) -> Result<(), String> {
 
         // Copy to clipboard using pbcopy
         let mut pbcopy = Command::new("pbcopy")
-            .stdin(std::process::Stdio::piped())
+            .stdin(Stdio::piped())
             .spawn()
             .map_err(|e| format!("Failed to spawn pbcopy: {}", e))?;
 
-        use std::io::Write;
+        use tokio::io::AsyncWriteExt;
         if let Some(mut stdin) = pbcopy.stdin.take() {
             stdin
                 .write_all(text.as_bytes())
+                .await
                 .map_err(|e| format!("Failed to write to pbcopy: {}", e))?;
         }
 
         pbcopy
             .wait()
+            .await
             .map_err(|e| format!("Failed to wait for pbcopy: {}", e))?;
 
         logger::debug("Clipboard updated, waiting before paste...");
 
-        // Wait for clipboard to be ready
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        // Wait for clipboard to be ready (async, non-blocking)
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-        // CRITICAL: Activate the app and make it key window to receive keyboard input
-        let activate_script = format!(
+        // Combined script: Activate app, wait, then paste
+        // This reduces 2 osascript calls to 1, saving ~50ms process spawn overhead
+        let combined_script = format!(
             r#"
-            tell application "{}"
+            tell application "{app_name}"
                 activate
             end tell
             tell application "System Events"
-                tell process "{}"
+                tell process "{app_name}"
                     set frontmost to true
                 end tell
+                delay 0.15
+                keystroke "v" using command down
             end tell
             "#,
-            focused_app.name, focused_app.name
+            app_name = focused_app.name
         );
 
         logger::debug(&format!(
-            "Activating {} and making it key window...",
+            "Activating {} and pasting in single script...",
             focused_app.name
         ));
 
-        Command::new("osascript")
-            .arg("-e")
-            .arg(&activate_script)
-            .output()
-            .map_err(|e| format!("Failed to activate app: {}", e))?;
-
-        // Wait for activation to complete
-        std::thread::sleep(std::time::Duration::from_millis(200));
-
-        // Use System Events to paste - this should work with the frontmost app
-        let paste_script = r#"
-            tell application "System Events"
-                keystroke "v" using command down
-            end tell
-        "#;
-
-        logger::debug("Sending Cmd+V...");
-
         let output = Command::new("osascript")
             .arg("-e")
-            .arg(paste_script)
+            .arg(&combined_script)
             .output()
+            .await
             .map_err(|e| format!("Failed to execute paste command: {}", e))?;
 
         if !output.status.success() {

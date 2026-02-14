@@ -49,6 +49,10 @@ pub struct RecordingMetadata {
 
     // App version
     pub app_version: String,
+
+    // Audio file status
+    #[serde(default)]
+    pub has_audio: bool, // Whether audio file was saved (based on saveAudioRecordings setting)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -121,6 +125,7 @@ impl RecordingMetadata {
         style_applied: Option<String>,
         style_category: Option<String>,
         prompt_context: PromptContext,
+        has_audio: bool,
     ) -> Self {
         use chrono::prelude::*;
 
@@ -152,6 +157,7 @@ impl RecordingMetadata {
             focused_app_category,
             prompt_context,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
+            has_audio,
         }
     }
 }

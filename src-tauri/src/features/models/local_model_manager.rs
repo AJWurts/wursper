@@ -1,8 +1,15 @@
 use std::collections::HashMap;
 
 use super::engines::{
-    whisper::WhisperEngine, LocalModelEngine, ModelConfig, ModelInfo, ModelStatus,
+    candle_whisper::CandleWhisperEngine, whisper::WhisperEngine, LocalModelEngine, ModelConfig,
+    ModelInfo, ModelStatus,
 };
+
+#[cfg(target_os = "macos")]
+use super::engines::apple_speech::AppleSpeechEngine;
+
+#[cfg(target_os = "macos")]
+use super::engines::whisperkit::WhisperKitEngine;
 
 /// Generic manager for all local model engines
 ///
@@ -24,12 +31,22 @@ impl LocalModelManager {
     pub fn new() -> Self {
         let mut engines: HashMap<String, Box<dyn LocalModelEngine>> = HashMap::new();
 
-        // Register Whisper engine
+        // Register Whisper engine (whisper.cpp via whisper-rs)
         engines.insert("whisper".to_string(), Box::new(WhisperEngine::new()));
 
-        // Future engines can be registered here:
-        // engines.insert("llama".to_string(), Box::new(LlamaEngine::new()));
-        // engines.insert("mistral".to_string(), Box::new(MistralEngine::new()));
+        // Register Candle Whisper engine (Pure Rust with Metal GPU)
+        engines.insert("candle".to_string(), Box::new(CandleWhisperEngine::new()));
+
+        // Register Apple Speech engine (macOS only)
+        #[cfg(target_os = "macos")]
+        engines.insert(
+            "apple-speech".to_string(),
+            Box::new(AppleSpeechEngine::new()),
+        );
+
+        // Register WhisperKit engine (macOS only - requires Swift bridge)
+        #[cfg(target_os = "macos")]
+        engines.insert("whisperkit".to_string(), Box::new(WhisperKitEngine::new()));
 
         Self {
             engines,

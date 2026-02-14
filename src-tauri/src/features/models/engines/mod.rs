@@ -2,6 +2,14 @@ use serde::{Deserialize, Serialize};
 
 pub mod whisper;
 
+#[cfg(target_os = "macos")]
+pub mod apple_speech;
+
+pub mod candle_whisper;
+
+#[cfg(target_os = "macos")]
+pub mod whisperkit;
+
 /// Status of a local model engine
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]

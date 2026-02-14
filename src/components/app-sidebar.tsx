@@ -16,10 +16,12 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from '@/components/ui/sidebar'
 
 import { DictaVersion } from './dicta-version'
@@ -68,12 +70,18 @@ export function AppSidebar() {
       <Sidebar variant="sidebar" collapsible="offcanvas">
         <SidebarContent className="pt-12">
           <SidebarHeader>
-            <h2 className="text-xl font-bold flex items-center gap-2.5 text-primary">
-              <DictaLogo size={28} className="text-primary" />
-              <span className="text-primary sour-gummy">Dicta</span>
-            </h2>
+            <div className="flex items-center gap-2.5 px-1">
+              <DictaLogo size={22} className="text-primary" />
+              <span className="text-base font-semibold tracking-tight text-foreground sour-gummy">
+                Dicta
+              </span>
+            </div>
           </SidebarHeader>
+          <SidebarSeparator className="my-1" />
           <SidebarGroup>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60 font-medium">
+              Navigation
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {menuItems.map(item => {
@@ -87,9 +95,9 @@ export function AppSidebar() {
                       >
                         <Link
                           to={item.path}
-                          className="flex items-center gap-3"
+                          className="flex items-center gap-2.5"
                         >
-                          <item.icon className="h-4 w-4" />
+                          <item.icon className="h-4 w-4" strokeWidth={1.75} />
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
@@ -102,28 +110,17 @@ export function AppSidebar() {
         </SidebarContent>
 
         <SidebarFooter className="pb-4">
+          <SidebarSeparator className="mb-1" />
           <SidebarMenu>
-            {/* <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                isActive={location.pathname === '/help'}
-                tooltip="Help"
-              >
-                <Link to="/help" className="flex items-center gap-3">
-                  <HelpCircle className="h-4 w-4" />
-                  <span>Help</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem> */}
             <SidebarMenuItem>
               <SidebarMenuButton
                 onClick={() => setSettingsOpen(true)}
-                className="flex items-center gap-3"
+                className="flex items-center gap-2.5"
                 tooltip="Settings (⌘,)"
               >
-                <Settings className="h-4 w-4" />
+                <Settings className="h-4 w-4" strokeWidth={1.75} />
                 <span>Settings</span>
-                <span className="ml-auto text-xs text-muted-foreground">
+                <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">
                   ⌘,
                 </span>
               </SidebarMenuButton>

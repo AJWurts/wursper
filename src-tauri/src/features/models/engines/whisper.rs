@@ -203,13 +203,14 @@ impl WhisperEngine {
         // Calculate resampling ratio
         let resample_ratio = output_rate as f64 / input_rate as f64;
 
-        // Create resampler with high quality settings
+        // Create resampler with balanced quality settings
+        // Lower values for faster processing while maintaining speech recognition quality
         let params = SincInterpolationParameters {
-            sinc_len: 256,
-            f_cutoff: 0.95,
+            sinc_len: 64,   // Reduced from 256 - still good for speech
+            f_cutoff: 0.91, // Slightly lower cutoff - fine for voice frequencies
             interpolation: SincInterpolationType::Linear,
-            oversampling_factor: 256,
-            window: WindowFunction::BlackmanHarris2,
+            oversampling_factor: 128, // Reduced from 256 - faster processing
+            window: WindowFunction::Blackman, // Simpler window function
         };
 
         let mut resampler = SincFixedIn::<f32>::new(
