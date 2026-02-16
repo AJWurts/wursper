@@ -1,230 +1,268 @@
-use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
-    Aes256Gcm, Nonce,
-};
-use base64::{engine::general_purpose, Engine as _};
+//! Security module for API key management
+//!
+//! Provides secure storage of API keys using the macOS system keychain.
+//! Includes in-memory caching to minimize keychain access and password prompts.
+
+pub mod keychain;
+pub mod legacy;
+pub mod migration;
+
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::RwLock;
 use tauri::{command, AppHandle};
 use tauri_plugin_store::StoreExt;
 
-const NONCE: &[u8; 12] = b"unique nonce"; // In production, use random nonce per encryption
+/// In-memory cache for API keys to reduce keychain access
+/// This minimizes password prompts during a session
+/// Key: model_id, Value: API key (empty string means "checked but not found")
+static API_KEY_CACHE: RwLock<Option<HashMap<String, Option<String>>>> = RwLock::new(None);
 
-/// Get or create encryption key
-fn get_encryption_key(app: &AppHandle) -> Result<[u8; 32], String> {
-    let store = app
-        .store(".secrets")
-        .map_err(|e| format!("Failed to access secrets store: {}", e))?;
-
-    // Try to get existing key
-    if let Some(key_value) = store.get("encryption_key") {
-        if let Some(key_str) = key_value.as_str() {
-            let key_bytes = general_purpose::STANDARD
-                .decode(key_str)
-                .map_err(|e| format!("Failed to decode encryption key: {}", e))?;
-
-            if key_bytes.len() == 32 {
-                let mut key = [0u8; 32];
-                key.copy_from_slice(&key_bytes);
-                return Ok(key);
-            }
-        }
+/// Initialize the cache
+fn ensure_cache_initialized() {
+    let mut cache = API_KEY_CACHE.write().unwrap();
+    if cache.is_none() {
+        *cache = Some(HashMap::new());
     }
-
-    // Generate new key
-    let key = Aes256Gcm::generate_key(&mut OsRng);
-    let key_bytes: &[u8] = key.as_ref();
-    let key_b64 = general_purpose::STANDARD.encode(key_bytes);
-
-    store.set("encryption_key", Value::String(key_b64));
-    store
-        .save()
-        .map_err(|e| format!("Failed to save encryption key: {}", e))?;
-
-    let mut key_array = [0u8; 32];
-    key_array.copy_from_slice(key_bytes);
-    Ok(key_array)
 }
 
-/// Encrypt a string
-fn encrypt_string(key: &[u8; 32], plaintext: &str) -> Result<String, String> {
-    let cipher = Aes256Gcm::new(key.into());
-    let nonce = Nonce::from_slice(NONCE);
-
-    let ciphertext = cipher
-        .encrypt(nonce, plaintext.as_bytes())
-        .map_err(|e| format!("Encryption failed: {}", e))?;
-
-    Ok(general_purpose::STANDARD.encode(ciphertext))
+/// Check if we've already checked this model's key (regardless of result)
+fn is_cached(model_id: &str) -> bool {
+    let cache = API_KEY_CACHE.read().unwrap();
+    cache.as_ref().map(|c| c.contains_key(model_id)).unwrap_or(false)
 }
 
-/// Decrypt a string
-fn decrypt_string(key: &[u8; 32], ciphertext: &str) -> Result<String, String> {
-    let cipher = Aes256Gcm::new(key.into());
-    let nonce = Nonce::from_slice(NONCE);
-
-    let ciphertext_bytes = general_purpose::STANDARD
-        .decode(ciphertext)
-        .map_err(|e| format!("Failed to decode ciphertext: {}", e))?;
-
-    let plaintext = cipher
-        .decrypt(nonce, ciphertext_bytes.as_ref())
-        .map_err(|e| format!("Decryption failed: {}", e))?;
-
-    String::from_utf8(plaintext).map_err(|e| format!("Failed to decode plaintext: {}", e))
+/// Get API key from cache (returns None if not cached OR if cached as "no key")
+fn get_cached_key(model_id: &str) -> Option<String> {
+    let cache = API_KEY_CACHE.read().unwrap();
+    cache.as_ref().and_then(|c| c.get(model_id).cloned()).flatten()
 }
 
-/// Store an API key securely in models.json
+/// Check if API key exists in cache
+fn has_cached_key(model_id: &str) -> Option<bool> {
+    let cache = API_KEY_CACHE.read().unwrap();
+    cache.as_ref().and_then(|c| c.get(model_id).map(|v| v.is_some()))
+}
+
+/// Store API key in cache
+fn cache_key(model_id: &str, api_key: &str) {
+    ensure_cache_initialized();
+    let mut cache = API_KEY_CACHE.write().unwrap();
+    if let Some(c) = cache.as_mut() {
+        c.insert(model_id.to_string(), Some(api_key.to_string()));
+    }
+}
+
+/// Mark that we checked and there's no key
+fn cache_no_key(model_id: &str) {
+    ensure_cache_initialized();
+    let mut cache = API_KEY_CACHE.write().unwrap();
+    if let Some(c) = cache.as_mut() {
+        c.insert(model_id.to_string(), None);
+    }
+}
+
+/// Remove API key from cache
+fn uncache_key(model_id: &str) {
+    let mut cache = API_KEY_CACHE.write().unwrap();
+    if let Some(c) = cache.as_mut() {
+        c.remove(model_id);
+    }
+}
+
+/// Store an API key securely in the system keychain
 #[command]
 pub async fn store_api_key(
     app: AppHandle,
     model_id: String,
     api_key: String,
 ) -> Result<(), String> {
-    let key = get_encryption_key(&app)?;
-    let encrypted = encrypt_string(&key, &api_key)?;
+    // Store in system keychain
+    keychain::store_api_key_keychain(&model_id, &api_key)?;
 
-    let store = app
-        .store("models.json")
-        .map_err(|e| format!("Failed to access models store: {}", e))?;
+    // Cache in memory for this session
+    cache_key(&model_id, &api_key);
 
-    // Get all models
-    let mut models = store
-        .get("models")
-        .and_then(|v| v.as_array().cloned())
-        .unwrap_or_default();
-
-    // Find and update the model
-    let mut found = false;
-    for model in models.iter_mut() {
-        if let Some(obj) = model.as_object_mut() {
-            if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
-                if id == model_id {
-                    // Store encrypted API key
-                    obj.insert("apiKey".to_string(), Value::String(encrypted.clone()));
-                    // Set hasApiKey flag for frontend
-                    obj.insert("hasApiKey".to_string(), Value::Bool(true));
-                    found = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    if !found {
-        return Err(format!("Model with ID '{}' not found", model_id));
-    }
-
-    // Save back to store
-    store.set("models", Value::Array(models));
-    store
-        .save()
-        .map_err(|e| format!("Failed to save models: {}", e))?;
+    // Update hasApiKey flag in models.json for frontend
+    update_has_api_key_flag(&app, &model_id, true)?;
 
     Ok(())
 }
 
-/// Retrieve an API key securely
+/// Retrieve an API key from the system keychain
 #[command]
 pub async fn get_api_key(app: AppHandle, model_id: String) -> Result<String, String> {
     get_api_key_internal(&app, &model_id).await
 }
 
-/// Remove an API key from models.json
+/// Remove an API key from the system keychain
 #[command]
 pub async fn remove_api_key(app: AppHandle, model_id: String) -> Result<(), String> {
-    let store = app
-        .store("models.json")
-        .map_err(|e| format!("Failed to access models store: {}", e))?;
-
-    // Get all models
-    let mut models = store
-        .get("models")
-        .and_then(|v| v.as_array().cloned())
-        .unwrap_or_default();
-
-    // Find and update the model
-    let mut found = false;
-    for model in models.iter_mut() {
-        if let Some(obj) = model.as_object_mut() {
-            if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
-                if id == model_id {
-                    // Remove encrypted API key
-                    obj.remove("apiKey");
-                    // Set hasApiKey flag to false for frontend
-                    obj.insert("hasApiKey".to_string(), Value::Bool(false));
-                    found = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    if !found {
-        return Err(format!("Model with ID '{}' not found", model_id));
-    }
-
-    // Save back to store
-    store.set("models", Value::Array(models));
-    store
-        .save()
-        .map_err(|e| format!("Failed to save models: {}", e))?;
-
+    keychain::delete_api_key_keychain(&model_id)?;
+    uncache_key(&model_id);
+    update_has_api_key_flag(&app, &model_id, false)?;
     Ok(())
 }
 
 /// Check if an API key exists for a model
 #[command]
-pub async fn has_api_key(app: AppHandle, model_id: String) -> Result<bool, String> {
-    let store = app
-        .store("models.json")
-        .map_err(|e| format!("Failed to access models store: {}", e))?;
-
-    let models = store
-        .get("models")
-        .and_then(|v| v.as_array().cloned())
-        .ok_or("No models found")?;
-
-    for model in &models {
-        if let Some(obj) = model.as_object() {
-            if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
-                if id == model_id {
-                    return Ok(obj.get("apiKey").is_some());
-                }
-            }
-        }
-    }
-
-    Ok(false)
+pub async fn has_api_key(_app: AppHandle, model_id: String) -> Result<bool, String> {
+    Ok(has_api_key_internal(&model_id))
 }
 
-/// Internal function to retrieve and decrypt API key (non-command, for Rust-only usage)
-pub async fn get_api_key_internal(app: &AppHandle, model_id: &str) -> Result<String, String> {
-    let key = get_encryption_key(app)?;
+/// Internal function to retrieve API key (for Rust-only usage)
+/// Uses in-memory cache to minimize keychain access
+pub async fn get_api_key_internal(_app: &AppHandle, model_id: &str) -> Result<String, String> {
+    // Check cache first
+    if let Some(cached) = get_cached_key(model_id) {
+        return Ok(cached);
+    }
+
+    // If we've already checked and there's no key, return error without keychain access
+    if is_cached(model_id) {
+        return Err(format!("No API key found for model: {}", model_id));
+    }
+
+    // Fetch from keychain and cache it
+    match keychain::get_api_key_keychain(model_id) {
+        Ok(api_key) => {
+            cache_key(model_id, &api_key);
+            Ok(api_key)
+        }
+        Err(e) => {
+            cache_no_key(model_id);
+            Err(e)
+        }
+    }
+}
+
+/// Internal function to check if API key exists (synchronous, for Rust-only usage)
+/// Uses in-memory cache to minimize keychain access
+pub fn has_api_key_internal(model_id: &str) -> bool {
+    // Check cache first
+    if let Some(has_key) = has_cached_key(model_id) {
+        return has_key;
+    }
+
+    // Check keychain and cache result
+    let has_key = keychain::has_api_key_keychain(model_id);
+    if has_key {
+        // We know it exists, but we don't have the actual key yet
+        // Don't cache the key itself - let get_api_key_internal do that
+    } else {
+        cache_no_key(model_id);
+    }
+    has_key
+}
+
+/// Sync hasApiKey flags in models.json with actual keychain state
+/// Called on app startup to ensure flags are accurate
+/// Also pre-caches API keys in memory to avoid repeated keychain access
+pub async fn sync_api_key_flags(app: &AppHandle) -> Result<(), String> {
+    log::info!("Syncing API key flags and pre-caching keys...");
 
     let store = app
         .store("models.json")
         .map_err(|e| format!("Failed to access models store: {}", e))?;
 
-    let models = store
-        .get("models")
-        .and_then(|v| v.as_array().cloned())
-        .ok_or("No models found")?;
+    let Some(models_value) = store.get("models") else {
+        return Ok(());
+    };
 
-    // Find the model and get its encrypted API key
-    for model in &models {
-        if let Some(obj) = model.as_object() {
-            if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
-                if id == model_id {
-                    let encrypted = obj
-                        .get("apiKey")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| format!("No API key found for model: {}", model_id))?;
+    let mut models = models_value
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
 
-                    return decrypt_string(&key, encrypted);
+    let mut synced_count = 0;
+    let mut cached_count = 0;
+
+    for model in models.iter_mut() {
+        if let Some(obj) = model.as_object_mut() {
+            let model_id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let requires_api_key = obj
+                .get("requiresApiKey")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            if requires_api_key && !model_id.is_empty() {
+                // Check keychain and pre-cache the result
+                match keychain::get_api_key_keychain(model_id) {
+                    Ok(api_key) => {
+                        // Cache the API key in memory
+                        cache_key(model_id, &api_key);
+                        cached_count += 1;
+
+                        // Update flag if needed
+                        let has_key_flag = obj
+                            .get("hasApiKey")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+
+                        if !has_key_flag {
+                            obj.insert("hasApiKey".to_string(), Value::Bool(true));
+                            synced_count += 1;
+                        }
+                    }
+                    Err(_) => {
+                        // Mark as no key in cache
+                        cache_no_key(model_id);
+
+                        // Update flag if needed
+                        let has_key_flag = obj
+                            .get("hasApiKey")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+
+                        if has_key_flag {
+                            obj.insert("hasApiKey".to_string(), Value::Bool(false));
+                            synced_count += 1;
+                        }
+                    }
                 }
             }
         }
     }
 
-    Err(format!("Model not found: {}", model_id))
+    if synced_count > 0 {
+        store.set("models", Value::Array(models));
+        store.save().map_err(|e| format!("Failed to save: {}", e))?;
+    }
+
+    log::info!("Pre-cached {} API keys, synced {} flags", cached_count, synced_count);
+
+    Ok(())
+}
+
+/// Update the hasApiKey flag in models.json
+fn update_has_api_key_flag(app: &AppHandle, model_id: &str, has_key: bool) -> Result<(), String> {
+    let store = app
+        .store("models.json")
+        .map_err(|e| format!("Failed to access models store: {}", e))?;
+
+    let mut models = store
+        .get("models")
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default();
+
+    let mut found = false;
+    for model in models.iter_mut() {
+        if let Some(obj) = model.as_object_mut() {
+            if obj.get("id").and_then(|v| v.as_str()) == Some(model_id) {
+                obj.insert("hasApiKey".to_string(), Value::Bool(has_key));
+                obj.remove("apiKey"); // Remove legacy field if present
+                found = true;
+                break;
+            }
+        }
+    }
+
+    if !found {
+        return Err(format!("Model '{}' not found", model_id));
+    }
+
+    store.set("models", Value::Array(models));
+    store.save().map_err(|e| format!("Failed to save: {}", e))?;
+
+    Ok(())
 }

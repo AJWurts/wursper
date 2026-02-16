@@ -1,6 +1,10 @@
+//! Tauri commands for managing local models
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::sync::Arc;
 use tauri::{command, AppHandle, Emitter, State};
+use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
 use super::engines::{ModelConfig, ModelStatus};
@@ -19,14 +23,6 @@ pub struct LocalModelStatusInfo {
 }
 
 /// Start (load) a local model into memory
-///
-/// # Arguments
-/// * `model_id` - The model identifier (e.g., "whisper-tiny", "llama-3-8b")
-/// * `model_name` - The model name (e.g., "tiny", "base", "llama-3-8b")
-/// * `model_path` - The full path to the model file
-/// * `engine_type` - The engine to use (e.g., "whisper", "llama")
-/// * `state` - Shared local model manager state
-/// * `app` - Tauri app handle for emitting events
 #[command]
 pub async fn start_local_model(
     model_id: String,
@@ -36,6 +32,13 @@ pub async fn start_local_model(
     state: State<'_, LocalModelState>,
     app: AppHandle,
 ) -> Result<(), String> {
+    log::info!("Starting local model: {} (engine: {})", model_id, engine_type);
+
+    // Update AI processing settings for LLM models
+    if model_id.starts_with("llm-") || engine_type == "llama" {
+        update_ai_settings(&app, &model_id);
+    }
+
     let mut manager = state.lock().await;
 
     // Emit loading event
@@ -48,17 +51,19 @@ pub async fn start_local_model(
         },
     );
 
-    // Create model configuration
     let config = ModelConfig {
         model_path,
         model_name: model_name.clone(),
         language: None,
     };
 
-    // Load the model using the specified engine
-    let result = manager.load_model(&engine_type, config);
+    // Route to correct engine type
+    let result = if engine_type == "llama" {
+        manager.load_llm_model(&engine_type, config)
+    } else {
+        manager.load_model(&engine_type, config)
+    };
 
-    // Emit result event
     match result {
         Ok(()) => {
             let _ = app.emit(
@@ -85,39 +90,89 @@ pub async fn start_local_model(
     }
 }
 
-/// Stop (unload) the current local model from memory
-///
-/// # Arguments
-/// * `state` - Shared local model manager state
-/// * `app` - Tauri app handle for emitting events
+/// Update AI processing settings for LLM models
+fn update_ai_settings(app: &AppHandle, model_id: &str) {
+    let Ok(store) = app.store("settings") else {
+        return;
+    };
+
+    let Some(settings_value) = store.get("settings") else {
+        return;
+    };
+
+    let mut settings = settings_value.clone();
+    let Some(obj) = settings.as_object_mut() else {
+        return;
+    };
+
+    obj.insert(
+        "aiProcessing".to_string(),
+        serde_json::json!({
+            "enabled": true,
+            "postProcessingModelId": model_id
+        }),
+    );
+
+    store.set("settings", settings);
+    let _ = store.save();
+}
+
+/// Stop (unload) a specific local model from memory
 #[command]
 pub async fn stop_local_model(
+    model_id: Option<String>,
     state: State<'_, LocalModelState>,
     app: AppHandle,
 ) -> Result<(), String> {
     let mut manager = state.lock().await;
-    manager.unload_model();
+
+    match &model_id {
+        Some(id) if id.starts_with("llm-") => {
+            log::info!("Stopping LLM model: {}", id);
+            manager.unload_llm_model();
+        }
+        Some(id) => {
+            log::info!("Stopping STT model: {}", id);
+            manager.unload_model();
+        }
+        None => {
+            log::info!("Stopping all local models");
+            manager.unload_model();
+            manager.unload_llm_model();
+        }
+    }
 
     let _ = app.emit(
         "local-model-status",
         LocalModelStatusInfo {
             status: ModelStatus::Stopped,
             model_name: None,
-            model_id: None,
+            model_id: model_id.clone(),
         },
     );
 
     Ok(())
 }
 
+/// Debug command to check AI processing settings
+#[command]
+pub async fn debug_ai_settings(app: AppHandle) -> Result<Value, String> {
+    let store = app
+        .store("settings")
+        .map_err(|e| format!("Failed to get settings store: {}", e))?;
+
+    let settings = store
+        .get("settings")
+        .ok_or("No settings found in store")?
+        .clone();
+
+    settings
+        .get("aiProcessing")
+        .cloned()
+        .ok_or_else(|| "aiProcessing not found".to_string())
+}
+
 /// Get the current local model status
-///
-/// # Arguments
-/// * `model_id` - The model identifier to check status for (optional)
-/// * `state` - Shared local model manager state
-///
-/// # Returns
-/// Current status, loaded model name, and model ID (if any)
 #[command]
 pub async fn get_local_model_status(
     model_id: Option<String>,
@@ -125,18 +180,25 @@ pub async fn get_local_model_status(
 ) -> Result<LocalModelStatusInfo, String> {
     let manager = state.lock().await;
 
-    let model_info = manager.get_loaded_model_info();
+    let stt_model_info = manager.get_loaded_model_info();
+    let llm_model_info = manager.get_loaded_llm_model_info();
 
-    // If a specific model_id is requested, check if it matches the loaded model
-    if let Some(requested_id) = model_id {
-        // Check if we have a loaded model and it matches
-        if let Some(info) = model_info {
-            // For now, we compare by model name since we don't store the full ID
-            // This works for whisper models like "whisper-tiny" -> name is "tiny"
-            // Future: Consider storing the full model_id in ModelInfo
-            let matches = requested_id.contains(&info.name);
+    if let Some(requested_id) = model_id.clone() {
+        if requested_id.starts_with("llm-") {
+            if let Some(info) = llm_model_info {
+                let matches = requested_id.contains(&info.name.to_lowercase().replace(" ", "-"))
+                    || requested_id.contains(&info.name.to_lowercase().replace(" ", ""));
 
-            if matches {
+                if matches {
+                    return Ok(LocalModelStatusInfo {
+                        status: manager.get_llm_status(),
+                        model_name: Some(info.name),
+                        model_id: Some(requested_id),
+                    });
+                }
+            }
+        } else if let Some(info) = stt_model_info {
+            if requested_id.contains(&info.name) {
                 return Ok(LocalModelStatusInfo {
                     status: manager.get_status(),
                     model_name: Some(info.name),
@@ -145,7 +207,6 @@ pub async fn get_local_model_status(
             }
         }
 
-        // If no model is loaded or it doesn't match, return stopped status
         return Ok(LocalModelStatusInfo {
             status: ModelStatus::Stopped,
             model_name: None,
@@ -153,10 +214,17 @@ pub async fn get_local_model_status(
         });
     }
 
-    // Return current loaded model status
-    Ok(LocalModelStatusInfo {
-        status: manager.get_status(),
-        model_name: model_info.as_ref().map(|i| i.name.clone()),
-        model_id: None, // We don't have the full model ID without the request parameter
-    })
+    if let Some(info) = llm_model_info {
+        Ok(LocalModelStatusInfo {
+            status: manager.get_llm_status(),
+            model_name: Some(info.name),
+            model_id: None,
+        })
+    } else {
+        Ok(LocalModelStatusInfo {
+            status: manager.get_status(),
+            model_name: stt_model_info.as_ref().map(|i| i.name.clone()),
+            model_id: None,
+        })
+    }
 }

@@ -18,6 +18,14 @@ export interface ModelCapabilities {
   bestFor: string[] // Best use cases
 }
 
+export interface PostProcessingCapabilities {
+  quality: 'best' | 'good' | 'basic'
+  speed: 'fast' | 'medium' | 'slow'
+  features: string[]
+  limitations?: string[]
+  note?: string
+}
+
 // Extended model type with frontend-specific fields
 export interface TranscriptionModel extends GeneratedModelDefinition {
   hasApiKey?: boolean

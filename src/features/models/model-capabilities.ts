@@ -1,4 +1,4 @@
-import type { ModelCapabilities, ModelProvider } from './types'
+import type { ModelCapabilities, PostProcessingCapabilities, ModelProvider } from './types'
 
 export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   // OpenAI Whisper
@@ -361,4 +361,144 @@ export function getProviderCapabilitySummary(provider: ModelProvider): string {
     default:
       return 'Speech-to-text transcription'
   }
+}
+
+// Post-processing model capabilities
+export const POST_PROCESSING_CAPABILITIES: Record<string, PostProcessingCapabilities> = {
+  // Cloud models - Best quality
+  'claude-3-5-sonnet-20241022': {
+    quality: 'best',
+    speed: 'fast',
+    features: [
+      'Advanced formatting & punctuation',
+      'Smart list detection',
+      'Context-aware corrections',
+      'Snippet expansion',
+      'Vocabulary matching',
+      'Style/vibe application',
+    ],
+    note: 'Best overall quality for post-processing',
+  },
+  'claude-3-5-haiku-20241022': {
+    quality: 'best',
+    speed: 'fast',
+    features: [
+      'Fast processing',
+      'Good formatting',
+      'Punctuation & capitalization',
+      'List formatting',
+      'Snippet expansion',
+    ],
+    note: 'Fastest cloud option with excellent quality',
+  },
+  'gpt-4o': {
+    quality: 'best',
+    speed: 'fast',
+    features: [
+      'Advanced formatting',
+      'Smart punctuation',
+      'List detection',
+      'Context understanding',
+      'Snippet expansion',
+    ],
+    note: 'Excellent quality, comparable to Claude',
+  },
+  'gpt-4o-mini': {
+    quality: 'best',
+    speed: 'fast',
+    features: [
+      'Good formatting',
+      'Punctuation & capitalization',
+      'List formatting',
+      'Snippet expansion',
+    ],
+    note: 'Great balance of cost and quality',
+  },
+
+  // Local LLM models - 7B+ (Good quality)
+  'llm-qwen2.5-7b-instruct': {
+    quality: 'good',
+    speed: 'medium',
+    features: [
+      'Offline processing',
+      'No API costs',
+      'Good formatting',
+      'List detection',
+      'Punctuation',
+    ],
+    note: 'Best local model - similar to GPT-4o Mini',
+  },
+  'llm-llama-3.1-8b-instruct': {
+    quality: 'good',
+    speed: 'medium',
+    features: [
+      'Offline processing',
+      'No API costs',
+      'Good formatting',
+      'Punctuation',
+    ],
+    note: 'Excellent local alternative',
+  },
+  'llm-mistral-7b-instruct': {
+    quality: 'good',
+    speed: 'fast',
+    features: [
+      'Offline processing',
+      'No API costs',
+      'Fast inference',
+      'Good formatting',
+    ],
+    note: 'Fast and reliable',
+  },
+
+  // Local LLM models - 3B (Basic quality)
+  'llm-phi-3.5-mini-instruct': {
+    quality: 'basic',
+    speed: 'fast',
+    features: [
+      'Offline processing',
+      'No API costs',
+      'Basic formatting',
+      'Punctuation',
+    ],
+    limitations: [
+      'May miss complex formatting',
+      'Limited list detection',
+    ],
+    note: 'Good for basic punctuation, limited formatting',
+  },
+  'llm-llama-3.2-3b-instruct': {
+    quality: 'basic',
+    speed: 'fast',
+    features: [
+      'Offline processing',
+      'No API costs',
+      'Basic formatting',
+    ],
+    limitations: [
+      'May miss complex formatting',
+      'Limited list detection',
+    ],
+    note: 'Compact but limited formatting ability',
+  },
+  'llm-qwen2.5-3b-instruct': {
+    quality: 'basic',
+    speed: 'fast',
+    features: [
+      'Offline processing',
+      'No API costs',
+      'Basic formatting',
+    ],
+    limitations: [
+      'May miss complex formatting',
+      'Limited list detection',
+    ],
+    note: 'Compact but limited formatting ability',
+  },
+}
+
+export function getPostProcessingCapabilities(
+  modelId: string
+): PostProcessingCapabilities | undefined {
+  return POST_PROCESSING_CAPABILITIES[modelId]
 }

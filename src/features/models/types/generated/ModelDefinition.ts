@@ -16,4 +16,8 @@ downloadUrl: string | null,
 /**
  * Filename to save the model as (for local models)
  */
-filename: string | null, };
+filename: string | null, 
+/**
+ * Whether this model is recommended
+ */
+isRecommended: boolean, };

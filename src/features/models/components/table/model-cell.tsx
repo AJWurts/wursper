@@ -10,9 +10,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-import { getModelCapabilities } from '../../model-capabilities'
+import { getModelCapabilities, getPostProcessingCapabilities } from '../../model-capabilities'
 import { getProviderInfo } from '../../provider-info'
 import { ModelInfoTooltip } from '../model-info-tooltip'
+import { PostProcessingInfoTooltip } from '../post-processing-info-tooltip'
 
 import type { TranscriptionModel, ModelStatus } from '../../types'
 
@@ -32,7 +33,9 @@ export function ModelCell({
   const providerInfo = getProviderInfo(model.provider)
   const isLocalModel = model.type === 'local'
   const status: ModelStatus = model.status || 'stopped'
-  const capabilities = getModelCapabilities(model.id)
+  const isPostProcessing = model.purpose === 'post-processing'
+  const sttCapabilities = getModelCapabilities(model.id)
+  const ppCapabilities = getPostProcessingCapabilities(model.id)
 
   const handleRefresh = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -115,6 +118,11 @@ export function ModelCell({
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm">{model.name}</span>
+          {model.isRecommended && (
+            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-primary/10 text-primary rounded">
+              Recommended
+            </span>
+          )}
           {isLocalModel && model.isDownloaded && onRefreshStatus && (
             <Button
               variant="ghost"
@@ -127,7 +135,11 @@ export function ModelCell({
               <RefreshCw className="h-3 w-3" />
             </Button>
           )}
-          <ModelInfoTooltip capabilities={capabilities} />
+          {isPostProcessing ? (
+            <PostProcessingInfoTooltip capabilities={ppCapabilities} />
+          ) : (
+            <ModelInfoTooltip capabilities={sttCapabilities} />
+          )}
         </div>
         <span className="text-xs text-muted-foreground">
           {providerInfo.name}

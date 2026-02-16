@@ -17,26 +17,27 @@ export async function downloadModel(
     return
   }
 
-  const downloadPromise = invoke<string>('download_local_model', {
-    modelId: model.id,
-    downloadUrl: model.downloadUrl,
-    filename: model.filename,
-    engineType: model.engine,
-  })
+  // Show loading toast
+  const toastId = toast.loading(`Downloading ${model.name}...`)
 
-  toast.promise(downloadPromise, {
-    loading: `Downloading ${model.name} model...`,
-    success: async () => {
-      // Reload models to update state
-      await initializeModels()
+  try {
+    await invoke<string>('download_local_model', {
+      modelId: model.id,
+      downloadUrl: model.downloadUrl,
+      filename: model.filename,
+      engineType: model.engine,
+    })
 
-      // Auto-select and start the downloaded model
-      await selectModel(model.id)
+    // Reload models to update state
+    await initializeModels()
 
-      return `${model.name} model ready to use!`
-    },
-    error: error => `Failed to download ${model.name}: ${error}`,
-  })
+    // Auto-select and start the downloaded model
+    await selectModel(model.id)
+
+    toast.success(`${model.name} ready to use!`, { id: toastId })
+  } catch (error) {
+    toast.error(`Failed to download: ${error}`, { id: toastId })
+  }
 }
 
 /**
@@ -64,11 +65,12 @@ export async function deleteModel(model: TranscriptionModel): Promise<void> {
 export async function syncModels(
   syncDefaultModels: () => Promise<void>
 ): Promise<void> {
-  const syncPromise = syncDefaultModels()
+  const toastId = toast.loading('Syncing models...')
 
-  toast.promise(syncPromise, {
-    loading: 'Syncing models...',
-    success: 'Models synced successfully!',
-    error: error => `Failed to sync models: ${error}`,
-  })
+  try {
+    await syncDefaultModels()
+    toast.success('Models synced!', { id: toastId })
+  } catch (error) {
+    toast.error(`Failed to sync: ${error}`, { id: toastId })
+  }
 }

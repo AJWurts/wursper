@@ -2,26 +2,39 @@ import Navbar from '@/components/Navbar'
 import Hero from '@/components/sections/Hero'
 import Features from '@/components/sections/Features'
 import VideoSection from '@/components/sections/VideoSection'
-import Reviews from '@/components/sections/Reviews'
+import Benefits from '@/components/sections/Benefits'
+import AdvancedFeatures from '@/components/sections/AdvancedFeatures'
+import NativeMac from '@/components/sections/NativeMac'
+import RealTime from '@/components/sections/RealTime'
 import OpenSource from '@/components/sections/OpenSource'
+import GetStarted from '@/components/sections/GetStarted'
 import Pricing from '@/components/sections/Pricing'
 import FAQ from '@/components/sections/FAQ'
+import FinalCTA from '@/components/sections/FinalCTA'
 import Footer from '@/components/sections/Footer'
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <Navbar />
-      <main className="flex-1">
-        <Hero />
-        <Features />
-        <VideoSection />
-        <Reviews />
-        <OpenSource />
-        <Pricing />
-        <FAQ />
-      </main>
-      <Footer />
+    <div className="min-h-screen bg-black text-foreground">
+      {/* Main bordered container */}
+      <div className="main-container">
+        <Navbar />
+        <main>
+          <Hero />
+          <Features />
+          <VideoSection />
+          <Benefits />
+          <AdvancedFeatures />
+          <NativeMac />
+          <RealTime />
+          <OpenSource />
+          <GetStarted />
+          <Pricing />
+          <FAQ />
+          <FinalCTA />
+        </main>
+        <Footer />
+      </div>
     </div>
   )
 }

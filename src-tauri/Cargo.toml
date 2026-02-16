@@ -67,6 +67,10 @@ cpal = "0.17.1"
 tempfile = "3.24.0"
 open = "5.3.3"
 rand = "0.9"
+keyring = { version = "3", features = ["apple-native"] }
+
+# LLM inference engine for local post-processing
+llama-cpp-2 = { version = "0.1", features = ["metal"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26"

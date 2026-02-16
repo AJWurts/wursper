@@ -43,6 +43,8 @@ pub enum ModelProvider {
     Ollama,
     #[serde(rename = "lmstudio")]
     LMStudio,
+    #[serde(rename = "local-llm")]
+    LocalLLM,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -68,6 +70,9 @@ pub struct ModelDefinition {
     pub download_url: Option<String>,
     /// Filename to save the model as (for local models)
     pub filename: Option<String>,
+    /// Whether this model is recommended
+    #[serde(default)]
+    pub is_recommended: bool,
 }
 
 // Speech-to-Text cloud models
@@ -193,50 +198,51 @@ pub const WHISPER_MODELS: &[(&str, &str, &str, &str, &str, Option<&str>)] = &[
     ),
 ];
 
-// Candle Whisper models (safetensors format, Metal GPU accelerated)
+// Candle Whisper models (safetensors format, pure Rust implementation)
 // Format: (id, hf_repo, size, description)
+// Note: Uses CPU - Metal backend lacks layer-norm support for Whisper
 pub const CANDLE_MODELS: &[(&str, &str, &str, &str)] = &[
     (
         "large-v3-turbo",
         "openai/whisper-large-v3-turbo",
         "1.6 GB",
-        "Best quality with Metal GPU acceleration",
+        "Best quality, pure Rust implementation",
     ),
     (
         "large-v3",
         "openai/whisper-large-v3",
         "3.1 GB",
-        "Highest accuracy, Metal GPU accelerated",
+        "Highest accuracy, pure Rust",
     ),
     (
         "distil-large-v3",
         "distil-whisper/distil-large-v3",
         "1.5 GB",
-        "Near-best quality, 6x faster with GPU",
+        "Near-best quality, 6x faster",
     ),
     (
         "medium",
         "openai/whisper-medium",
         "1.5 GB",
-        "High accuracy with Metal GPU",
+        "High accuracy, pure Rust",
     ),
     (
         "small",
         "openai/whisper-small",
         "488 MB",
-        "Balanced speed and accuracy with GPU",
+        "Balanced speed and accuracy",
     ),
     (
         "base",
         "openai/whisper-base",
         "148 MB",
-        "Fast with GPU acceleration",
+        "Fast and lightweight",
     ),
     (
         "tiny",
         "openai/whisper-tiny",
         "78 MB",
-        "Fastest, basic accuracy with GPU",
+        "Fastest, basic accuracy",
     ),
 ];
 
@@ -260,6 +266,62 @@ pub const WHISPERKIT_MODELS: &[(&str, &str, &str)] = &[
     ("tiny", "45 MB", "Fastest, minimal footprint"),
 ];
 
+// Local LLM models for post-processing (GGUF format)
+// Format: (id, url, size, description, display_name)
+// Note: Only 3B+ models included - smaller models can't follow formatting instructions reliably
+pub const LOCAL_LLM_MODELS: &[(&str, &str, &str, &str, &str)] = &[
+    // ============================================
+    // RECOMMENDED: 7B+ models (GPT-4o Mini equivalent)
+    // These provide quality similar to cloud models
+    // ============================================
+    (
+        "qwen2.5-7b-instruct",
+        "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf",
+        "4.7 GB",
+        "Qwen2.5 7B - Best local model, GPT-4o Mini equivalent",
+        "Qwen2.5 7B Instruct",
+    ),
+    (
+        "llama-3.1-8b-instruct",
+        "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+        "4.9 GB",
+        "Llama 3.1 8B - Meta's flagship, excellent formatting",
+        "Llama 3.1 8B Instruct",
+    ),
+    (
+        "mistral-7b-instruct",
+        "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
+        "4.4 GB",
+        "Mistral 7B v0.2 - Fast and accurate instruction following",
+        "Mistral 7B Instruct v0.2",
+    ),
+    // ============================================
+    // COMPACT: 3B models (minimum for good formatting)
+    // Good for machines with limited RAM
+    // ============================================
+    (
+        "phi-3.5-mini-instruct",
+        "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+        "2.3 GB",
+        "Phi-3.5 Mini (3.8B) - Microsoft's best compact model",
+        "Phi-3.5 Mini Instruct",
+    ),
+    (
+        "llama-3.2-3b-instruct",
+        "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+        "2.0 GB",
+        "Llama 3.2 3B - Meta's compact model",
+        "Llama 3.2 3B Instruct",
+    ),
+    (
+        "qwen2.5-3b-instruct",
+        "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
+        "2.0 GB",
+        "Qwen2.5 3B - Alibaba's efficient model",
+        "Qwen2.5 3B Instruct",
+    ),
+];
+
 #[command]
 pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, String> {
     let mut models = Vec::new();
@@ -278,7 +340,7 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             },
             model_type: ModelType::Cloud,
             purpose: ModelPurpose::SpeechToText,
-            engine: None, // Cloud models don't use local engines
+            engine: None,
             size: None,
             requires_api_key: true,
             is_selected: false,
@@ -287,6 +349,7 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             description: Some(description.to_string()),
             download_url: None,
             filename: None,
+            is_recommended: false,
         });
     }
 
@@ -311,6 +374,7 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             description: Some(description.to_string()),
             download_url: None,
             filename: None,
+            is_recommended: false,
         });
     }
 
@@ -373,13 +437,16 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
                     .iter()
                     .any(|(n, _, _, _, _, _)| *n == "large-v3-turbo"));
 
+        // Mark distil-large-v3 as recommended for STT
+        let is_recommended = *name == "distil-large-v3";
+
         models.push(ModelDefinition {
             id: format!("whisper-{}", name),
             name: model_name.clone(),
             provider: ModelProvider::LocalWhisper,
             model_type: ModelType::Local,
             purpose: ModelPurpose::SpeechToText,
-            engine: Some("whisper".to_string()), // Uses Whisper engine
+            engine: Some("whisper".to_string()),
             size: Some(size.to_string()),
             requires_api_key: false,
             is_selected: is_default,
@@ -392,10 +459,13 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             description: Some(format!("{} - Runs locally", description)),
             download_url: Some(url.to_string()),
             filename: Some(filename),
+            is_recommended,
         });
     }
 
-    // Add Candle Whisper models (Metal GPU accelerated)
+    // NOTE: Candle Whisper models are hidden from UI for now
+    // To re-enable, uncomment the following block
+    /*
     let candle_dir = app_data_dir.join("local_models").join("candle");
     for (name, hf_repo, size, description) in CANDLE_MODELS {
         // Candle models are downloaded from HuggingFace and cached
@@ -404,12 +474,12 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
         let downloaded = cache_path.exists();
 
         let model_name = if name.contains("large-v3-turbo") {
-            "Candle Large V3 Turbo (Metal)".to_string()
+            "Candle Large V3 Turbo".to_string()
         } else if name.contains("large-v3") {
-            "Candle Large V3 (Metal)".to_string()
+            "Candle Large V3".to_string()
         } else if name.contains("distil") {
             format!(
-                "Candle Distil {} (Metal)",
+                "Candle Distil {}",
                 name.replace("distil-", "")
                     .chars()
                     .next()
@@ -420,7 +490,7 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             )
         } else {
             format!(
-                "Candle {} (Metal)",
+                "Candle {}",
                 name.chars().next().unwrap().to_uppercase().to_string() + &name[1..]
             )
         };
@@ -441,12 +511,16 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             } else {
                 None
             },
-            description: Some(format!("{} - Pure Rust with Metal GPU", description)),
+            description: Some(format!("{} - Pure Rust implementation", description)),
             download_url: Some(format!("hf://{}", hf_repo)),
             filename: Some("model.safetensors".to_string()),
         });
     }
+    */ // End of Candle models block
 
+    // NOTE: WhisperKit and Apple Speech models are hidden from UI for now
+    // To re-enable, uncomment the following blocks
+    /*
     // Add WhisperKit models (macOS only, CoreML/Neural Engine)
     #[cfg(target_os = "macos")]
     {
@@ -521,6 +595,41 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             ),
             download_url: None,
             filename: None,
+        });
+    }
+    */ // End of WhisperKit and Apple Speech blocks
+
+    // Add local LLM models for post-processing
+    // Note: Uses "llama" directory to match the engine_type used during download
+    let llm_dir = app_data_dir.join("local_models").join("llama");
+    for (id, url, size, description, display_name) in LOCAL_LLM_MODELS {
+        let filename = url.split('/').last().unwrap_or("model.gguf").to_string();
+        let model_path = llm_dir.join(&filename);
+        let downloaded = model_path.exists();
+
+        // Mark qwen2.5-7b-instruct as recommended for post-processing
+        let is_recommended = *id == "qwen2.5-7b-instruct";
+
+        models.push(ModelDefinition {
+            id: format!("llm-{}", id),
+            name: display_name.to_string(),
+            provider: ModelProvider::LocalLLM,
+            model_type: ModelType::Local,
+            purpose: ModelPurpose::PostProcessing,
+            engine: Some("llama".to_string()),
+            size: Some(size.to_string()),
+            requires_api_key: false,
+            is_selected: false,
+            is_downloaded: Some(downloaded),
+            path: if downloaded {
+                Some(model_path.to_string_lossy().to_string())
+            } else {
+                None
+            },
+            description: Some(format!("{} - Runs locally, no API key needed", description)),
+            download_url: Some(url.to_string()),
+            filename: Some(filename),
+            is_recommended,
         });
     }
 

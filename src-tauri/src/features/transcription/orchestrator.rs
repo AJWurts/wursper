@@ -137,6 +137,20 @@ pub async fn transcribe_and_process(
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    // Log AI processing configuration for debugging
+    if ai_processing_enabled {
+        let post_processing_model_id = settings
+            .get("aiProcessing")
+            .and_then(|a| a.get("postProcessingModelId"))
+            .and_then(|v| v.as_str());
+        log::info!(
+            "AI post-processing enabled. Model ID: {:?}",
+            post_processing_model_id
+        );
+    } else {
+        log::debug!("AI post-processing is disabled");
+    }
+
     // Track if we showed a warning/error toast (to skip success toast later)
     let mut showed_warning_toast = false;
 
@@ -266,17 +280,7 @@ pub async fn transcribe_and_process(
     // Step 13: Save metadata
     save_metadata(&recording_folder, &metadata)?;
 
-    // Step 14: Show success toast (with probability) - skip if warning was shown
-    if !showed_warning_toast {
-        let _ = crate::features::window::show_toast(
-            &app,
-            "Transcription saved",
-            crate::features::window::ToastType::Success,
-            0.4,
-        );
-    }
-
-    // Step 16: Handle auto-paste/copy
+    // Step 14: Handle auto-paste/copy (do this BEFORE showing success toast)
     let auto_paste = settings
         .get("transcription")
         .and_then(|t| t.get("autoPaste"))
@@ -303,6 +307,16 @@ pub async fn transcribe_and_process(
         }
     }
 
+    // Step 15: Show success toast AFTER paste/copy step - skip if warning was shown
+    if !showed_warning_toast {
+        let _ = crate::features::window::show_toast(
+            &app,
+            "Transcription saved",
+            crate::features::window::ToastType::Success,
+            0.4,
+        );
+    }
+
     // Step 17: Emit events for UI updates
     app.emit("transcriptions-changed", ())
         .map_err(|e| format!("Failed to emit sync event: {}", e))?;
@@ -325,10 +339,23 @@ fn get_settings(app: &AppHandle) -> Result<Value, String> {
         .store("settings")
         .map_err(|e| format!("Failed to get settings store: {}", e))?;
 
-    let settings = store
+    let mut settings = store
         .get("settings")
         .ok_or("No settings found in store")?
         .clone();
+
+    // Ensure aiProcessing exists with defaults if missing
+    if settings.get("aiProcessing").is_none() {
+        if let Some(obj) = settings.as_object_mut() {
+            obj.insert(
+                "aiProcessing".to_string(),
+                serde_json::json!({
+                    "enabled": false,
+                    "postProcessingModelId": null
+                }),
+            );
+        }
+    }
 
     Ok(settings)
 }

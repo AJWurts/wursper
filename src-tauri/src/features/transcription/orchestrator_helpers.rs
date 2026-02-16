@@ -32,17 +32,23 @@ pub async fn apply_ai_post_processing(
         .get("aiProcessing")
         .ok_or("AI processing settings not found")?;
 
-    // Get post-processing model ID - if not selected, return error to skip post-processing
-    let model_id = match ai_settings
+    // Get enabled status
+    let ai_enabled = ai_settings
+        .get("enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    log::debug!("AI processing check - enabled: {}", ai_enabled);
+
+    // Get post-processing model ID
+    let model_id = ai_settings
         .get("postProcessingModelId")
         .and_then(|v| v.as_str())
-    {
-        Some(id) => id.to_string(),
-        None => {
-            // No model selected - caller should handle this gracefully
-            return Err("No post-processing model selected".to_string());
-        }
-    };
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .ok_or_else(|| "No post-processing model selected".to_string())?;
+
+    log::info!("Post-processing with model: {}", model_id);
 
     // Determine app category and get appropriate vibe
     let app_category = categorize_app(focused_app_name);

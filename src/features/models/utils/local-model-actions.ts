@@ -76,10 +76,13 @@ export async function startLocalModel(
 }
 
 /**
- * Stops (unloads) the current local model from memory
+ * Stops (unloads) a specific local model from memory
+ *
+ * @param modelId - Optional model ID to stop. If provided, only stops that model type.
+ *                  LLM models (llm-*) and STT models are managed separately.
  */
-export async function stopLocalModel(): Promise<void> {
-  await invoke('stop_local_model')
+export async function stopLocalModel(modelId?: string): Promise<void> {
+  await invoke('stop_local_model', { modelId: modelId || null })
 }
 
 /**

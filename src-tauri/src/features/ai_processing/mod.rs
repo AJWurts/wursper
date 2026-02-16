@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::{command, AppHandle};
 
+mod local_llm;
 mod providers;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,26 +27,45 @@ pub async fn post_process_transcript(
     request: PostProcessingRequest,
     app: AppHandle,
 ) -> Result<String, String> {
-    // Build system prompt
-    let system_prompt = build_system_prompt(
-        request.vocabulary.as_ref(),
-        request.snippets.as_ref(),
-        request.vibe_prompt.as_ref(),
-    );
-
-    // Get API key for selected model
-    let api_key = crate::features::security::get_api_key_internal(&app, &request.model_id)
-        .await
-        .map_err(|_| {
-            "API key not found for selected model. Please add your API key in settings.".to_string()
-        })?;
-
     // Determine provider from model_id
     let provider = get_model_provider(&request.model_id)?;
+
+    // Use simpler prompt for local models (they can't handle complex instructions)
+    let system_prompt = if provider == "local-llm" {
+        // Log snippets for debugging
+        if let Some(snips) = &request.snippets {
+            for snip in snips {
+                log::info!(
+                    "Snippet available: '{}' → '{}'",
+                    snip.trigger,
+                    snip.expansion
+                );
+            }
+        }
+        build_simple_prompt(
+            request.vocabulary.as_ref(),
+            request.snippets.as_ref(),
+            request.vibe_prompt.as_ref(),
+        )
+    } else {
+        build_system_prompt(
+            request.vocabulary.as_ref(),
+            request.snippets.as_ref(),
+            request.vibe_prompt.as_ref(),
+        )
+    };
 
     // Route to appropriate provider
     let processed_text = match provider.as_str() {
         "anthropic" | "anthropic-chat" => {
+            // Get API key for cloud models
+            let api_key = crate::features::security::get_api_key_internal(&app, &request.model_id)
+                .await
+                .map_err(|_| {
+                    "API key not found for selected model. Please add your API key in settings."
+                        .to_string()
+                })?;
+
             providers::process_with_anthropic(
                 request.text,
                 system_prompt,
@@ -55,18 +75,105 @@ pub async fn post_process_transcript(
             .await?
         }
         "openai" | "openai-chat" => {
+            // Get API key for cloud models
+            let api_key = crate::features::security::get_api_key_internal(&app, &request.model_id)
+                .await
+                .map_err(|_| {
+                    "API key not found for selected model. Please add your API key in settings."
+                        .to_string()
+                })?;
+
             providers::process_with_openai(request.text, system_prompt, api_key, request.model_id)
                 .await?
         }
+        "local-llm" => {
+            // Local LLM - no API key needed
+            local_llm::process_with_local_llm(
+                request.text,
+                system_prompt,
+                request.model_id,
+                app,
+            )
+            .await?
+        }
         _ => {
             return Err(format!(
-                "Unsupported AI model provider: {}. Please select an Anthropic or OpenAI model.",
+                "Unsupported AI model provider: {}. Please select an Anthropic, OpenAI, or local LLM model.",
                 provider
             ))
         }
     };
 
     Ok(processed_text)
+}
+
+/// Build an optimized prompt for local LLM models
+/// Uses clear structure, few-shot examples, and explicit rules
+fn build_simple_prompt(
+    vocabulary: Option<&Vec<String>>,
+    snippets: Option<&Vec<SnippetData>>,
+    _vibe_prompt: Option<&String>,
+) -> String {
+    let mut prompt = String::new();
+
+    // Clear role definition
+    prompt.push_str("You are a text formatter that cleans up speech transcripts.\n\n");
+
+    // Rules - numbered and clear
+    prompt.push_str("RULES:\n");
+    prompt.push_str("1. Add proper punctuation (periods, commas, question marks)\n");
+    prompt.push_str("2. Fix capitalization (start of sentences, proper nouns)\n");
+    prompt.push_str("3. Keep EVERY word from the input - never remove or summarize\n");
+    prompt.push_str("4. When items are listed (3+ things), format as bullet points\n");
+    prompt.push_str("5. Output ONLY the formatted text - no explanations\n\n");
+
+    // Snippet replacements - make very explicit
+    if let Some(snips) = snippets {
+        if !snips.is_empty() {
+            prompt.push_str("TEXT REPLACEMENTS (MUST apply these exact substitutions):\n");
+            for snip in snips {
+                prompt.push_str(&format!("• Replace \"{}\" with \"{}\"\n", snip.trigger, snip.expansion));
+            }
+            prompt.push_str("\n");
+        }
+    }
+
+    // Vocabulary
+    if let Some(words) = vocabulary {
+        if !words.is_empty() {
+            prompt.push_str(&format!(
+                "CORRECT SPELLINGS: {}\n\n",
+                words.join(", ")
+            ));
+        }
+    }
+
+    // Few-shot examples - diverse and clear
+    prompt.push_str("EXAMPLES:\n\n");
+
+    // Example 1: Basic punctuation
+    prompt.push_str("Input: hey how are you doing today\n");
+    prompt.push_str("Output: Hey, how are you doing today?\n\n");
+
+    // Example 2: List formatting
+    prompt.push_str("Input: i need to buy milk bread eggs and cheese\n");
+    prompt.push_str("Output: I need to buy:\n- Milk\n- Bread\n- Eggs\n- Cheese\n\n");
+
+    // Example 3: Multiple sentences
+    prompt.push_str("Input: the meeting is at three pm dont forget to bring the documents\n");
+    prompt.push_str("Output: The meeting is at 3 PM. Don't forget to bring the documents.\n\n");
+
+    // Example 4: Question
+    prompt.push_str("Input: can you send me the report by friday\n");
+    prompt.push_str("Output: Can you send me the report by Friday?\n\n");
+
+    // Example 5: List with intro (common pattern)
+    prompt.push_str("Input: here are the tasks first review the code then write tests finally deploy\n");
+    prompt.push_str("Output: Here are the tasks:\n- Review the code\n- Write tests\n- Deploy\n\n");
+
+    prompt.push_str("Now format this transcript:");
+
+    prompt
 }
 
 fn build_system_prompt(
@@ -263,7 +370,9 @@ fn get_model_provider(model_id: &str) -> Result<String, String> {
         Ok("anthropic".to_string())
     } else if model_id.starts_with("gpt-") {
         Ok("openai".to_string())
+    } else if model_id.starts_with("llm-") {
+        Ok("local-llm".to_string())
     } else {
-        Err(format!("Unable to determine provider from model ID: {}. Model ID should start with 'claude-' for Anthropic or 'gpt-' for OpenAI.", model_id))
+        Err(format!("Unable to determine provider from model ID: {}. Model ID should start with 'claude-' for Anthropic, 'gpt-' for OpenAI, or 'llm-' for local LLM.", model_id))
     }
 }

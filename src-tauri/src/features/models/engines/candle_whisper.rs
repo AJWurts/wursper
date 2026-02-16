@@ -6,7 +6,6 @@
 use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::whisper::{self as m, Config};
-use hf_hub::{api::sync::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 
 use super::{LocalModelEngine, ModelConfig, ModelInfo, ModelStatus};
@@ -42,14 +41,13 @@ struct LoadedCandleModel {
 impl CandleWhisperEngine {
     /// Creates a new CandleWhisperEngine
     ///
-    /// Automatically selects Metal GPU on macOS Apple Silicon,
-    /// falls back to CPU otherwise.
+    /// Uses CPU for inference since Metal GPU backend doesn't support
+    /// all operations needed for Whisper models (e.g., layer-norm).
     pub fn new() -> Self {
-        // Try to use Metal GPU on macOS, fall back to CPU
-        let device = Device::new_metal(0).unwrap_or_else(|e| {
-            log::info!("Metal not available ({}), using CPU", e);
-            Device::Cpu
-        });
+        // Use CPU - Metal doesn't have full support for Whisper operations
+        // (missing layer-norm implementation causes "Metal error no metal
+        // implementation for layer-norm")
+        let device = Device::Cpu;
 
         log::info!("Candle engine initialized with device: {:?}", device);
 
@@ -330,59 +328,52 @@ impl LocalModelEngine for CandleWhisperEngine {
     fn load_model(&mut self, config: ModelConfig) -> Result<(), String> {
         self.status = ModelStatus::Loading;
 
-        // For Candle, we need safetensors format models from HuggingFace
-        // The model_path should be a HuggingFace repo ID like "openai/whisper-large-v3-turbo"
+        // Check if model_path points to a local file (pre-downloaded)
+        let model_path_buf = std::path::PathBuf::from(&config.model_path);
 
-        let model_id = if config.model_path.starts_with("openai/")
-            || config.model_path.starts_with("distil-whisper/")
-        {
-            config.model_path.clone()
-        } else {
-            // Map local model names to HF repo IDs
-            match config.model_name.to_lowercase().as_str() {
-                name if name.contains("large-v3-turbo") => {
-                    "openai/whisper-large-v3-turbo".to_string()
-                }
-                name if name.contains("large-v3") => "openai/whisper-large-v3".to_string(),
-                name if name.contains("distil-large") => {
-                    "distil-whisper/distil-large-v3".to_string()
-                }
-                name if name.contains("medium") => "openai/whisper-medium".to_string(),
-                name if name.contains("small") => "openai/whisper-small".to_string(),
-                name if name.contains("base") => "openai/whisper-base".to_string(),
-                name if name.contains("tiny") => "openai/whisper-tiny".to_string(),
-                _ => {
-                    self.status = ModelStatus::Error;
-                    return Err(format!("Unknown model: {}", config.model_name));
-                }
-            }
-        };
+        log::info!(
+            "Attempting to load Candle model from path: {}",
+            config.model_path
+        );
 
-        log::info!("Loading Candle model from HuggingFace: {}", model_id);
-
-        // Download model files from HuggingFace
-        let api = Api::new().map_err(|e| {
+        // Candle models must be pre-downloaded - check if local files exist
+        if !model_path_buf.exists() || !model_path_buf.is_file() {
             self.status = ModelStatus::Error;
-            format!("Failed to initialize HuggingFace API: {}", e)
-        })?;
+            return Err(format!(
+                "Model not downloaded. Please download the model first. Expected path: {}",
+                config.model_path
+            ));
+        }
 
-        let repo = api.repo(Repo::new(model_id.clone(), RepoType::Model));
+        let model_dir = model_path_buf
+            .parent()
+            .ok_or_else(|| "Invalid model path".to_string())?;
 
-        // Download required files
-        let config_path = repo.get("config.json").map_err(|e| {
+        let config_path = model_dir.join("config.json");
+        let tokenizer_path = model_dir.join("tokenizer.json");
+
+        if !config_path.exists() {
             self.status = ModelStatus::Error;
-            format!("Failed to download config.json: {}", e)
-        })?;
-
-        let tokenizer_path = repo.get("tokenizer.json").map_err(|e| {
+            return Err(format!(
+                "config.json not found. Please re-download the model. Expected in: {}",
+                model_dir.display()
+            ));
+        }
+        if !tokenizer_path.exists() {
             self.status = ModelStatus::Error;
-            format!("Failed to download tokenizer.json: {}", e)
-        })?;
+            return Err(format!(
+                "tokenizer.json not found. Please re-download the model. Expected in: {}",
+                model_dir.display()
+            ));
+        }
 
-        let model_path = repo.get("model.safetensors").map_err(|e| {
-            self.status = ModelStatus::Error;
-            format!("Failed to download model.safetensors: {}", e)
-        })?;
+        log::info!(
+            "Loading Candle model from local path: {}",
+            model_dir.display()
+        );
+
+        let (config_path, tokenizer_path, model_path) =
+            (config_path, tokenizer_path, model_path_buf);
 
         // Load config
         let config_str = std::fs::read_to_string(&config_path).map_err(|e| {

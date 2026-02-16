@@ -45,10 +45,36 @@ pub async fn start_recording(
     if let Err(e) = check_model_available(&app) {
         log::warn!("Model not available: {}", e);
         log::info!("Skipping recording - model not downloaded or selected");
+        // Show error toast to inform user
+        let _ = crate::features::window::toast_window::show_toast(
+            &app,
+            &e,
+            crate::features::window::toast_window::ToastType::Error,
+            1.0,
+        );
         return Ok(RecordingResponse {
             success: false,
             state: state_manager.get_state(),
             error: Some(e),
+            file_path: None,
+        });
+    }
+
+    // Validate API keys for cloud models before starting recording
+    if let Err(e) = super::validation::validate_pre_recording(&app).await {
+        let error_message = e.user_message();
+        log::warn!("Pre-recording validation failed: {}", error_message);
+        // Show error toast to inform user
+        let _ = crate::features::window::toast_window::show_toast(
+            &app,
+            &error_message,
+            crate::features::window::toast_window::ToastType::Error,
+            1.0,
+        );
+        return Ok(RecordingResponse {
+            success: false,
+            state: state_manager.get_state(),
+            error: Some(error_message),
             file_path: None,
         });
     }

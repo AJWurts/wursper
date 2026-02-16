@@ -8,4 +8,5 @@ pub mod recordings;
 pub mod security;
 pub mod shortcuts;
 pub mod transcription;
+pub mod updates;
 pub mod window;

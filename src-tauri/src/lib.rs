@@ -24,7 +24,8 @@ use features::cache::SettingsCache;
 use features::data::{export_all_data, import_all_data, import_from_json};
 use features::models::{
     auto_start_selected_models, delete_local_model, download_local_model, get_all_models,
-    get_local_model_status, start_local_model, stop_local_model, LocalModelManager,
+    debug_ai_settings, get_local_model_status, start_local_model, stop_local_model,
+    LocalModelManager,
 };
 use features::recordings::{delete_recording, get_all_transcriptions, get_recording_audio_path};
 use features::security::{get_api_key, has_api_key, remove_api_key, store_api_key};
@@ -35,6 +36,7 @@ use features::shortcuts::{
     RecordingShortcutHandler, ShortcutManager,
 };
 use features::transcription::{get_last_transcript, paste_last_transcript, transcribe_and_process};
+use features::updates::{check_for_updates, download_and_install_update};
 use utils::logger;
 
 use std::sync::Arc;
@@ -185,6 +187,33 @@ pub fn run() {
             }
         }
 
+        // Migrate API keys from legacy encrypted storage to system keychain
+        // and sync hasApiKey flags with actual keychain state
+        let app_handle_migration = app.app_handle().clone();
+        tauri::async_runtime::spawn(async move {
+            // First, migrate any legacy keys
+            match features::security::migration::migrate_legacy_api_keys(&app_handle_migration).await
+            {
+                Ok(result) => {
+                    if result.migrated_count > 0 {
+                        log::info!(
+                            "API key migration completed: {} keys migrated to keychain",
+                            result.migrated_count
+                        );
+                    }
+                }
+                Err(e) => {
+                    log::error!("API key migration failed: {}", e);
+                }
+            }
+
+            // Then, sync hasApiKey flags with keychain state
+            // This ensures flags are accurate even if models.json is out of sync
+            if let Err(e) = features::security::sync_api_key_flags(&app_handle_migration).await {
+                log::error!("Failed to sync API key flags: {}", e);
+            }
+        });
+
         // Always use Accessory mode to ensure voice input pill works on:
         // - Full-screen apps
         // - All monitors/screens
@@ -294,6 +323,7 @@ pub fn run() {
             start_local_model,
             stop_local_model,
             get_local_model_status,
+            debug_ai_settings,
             // Secure API key storage
             store_api_key,
             get_api_key,
@@ -340,6 +370,9 @@ pub fn run() {
             check_speech_recognition_permission,
             #[cfg(target_os = "macos")]
             request_speech_recognition_permission,
+            // Updates
+            check_for_updates,
+            download_and_install_update,
         ])
         .setup(setup_fn)
         .build(tauri::generate_context!())

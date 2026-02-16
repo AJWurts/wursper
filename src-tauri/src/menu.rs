@@ -79,50 +79,73 @@ pub fn setup_tray(app: &App, model_manager_cleanup: Arc<Mutex<LocalModelManager>
 
     let microphone_submenu = microphone_submenu_builder.build()?;
 
-    let tray_menu = MenuBuilder::new(app)
-        .item(&MenuItem::with_id(app, "home", "Home", true, None::<&str>)?)
+    // Build quick actions submenu
+    let quick_actions_submenu = SubmenuBuilder::new(app, "Quick Actions")
+        .item(&MenuItem::with_id(
+            app,
+            "paste-last",
+            "Paste Last Transcript",
+            true,
+            Some("CmdOrCtrl+Shift+V"),
+        )?)
+        .build()?;
+
+    // Build help submenu
+    let help_submenu = SubmenuBuilder::new(app, "Help")
+        .item(&MenuItem::with_id(
+            app,
+            "general-feedback",
+            "Send Feedback...",
+            true,
+            None::<&str>,
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "report-issue",
+            "Report Issue...",
+            true,
+            None::<&str>,
+        )?)
         .separator()
         .item(&MenuItem::with_id(
             app,
             "check-updates",
-            "Check for updates...",
+            "Check for Updates...",
             true,
             None::<&str>,
         )?)
+        .build()?;
+
+    let tray_menu = MenuBuilder::new(app)
+        // Primary action
+        .item(&MenuItem::with_id(app, "home", "Open Dicta", true, None::<&str>)?)
         .separator()
-        .item(&MenuItem::with_id(
-            app,
-            "paste-last",
-            "Paste last transcript",
-            true,
-            Some("CmdOrCtrl+Shift+V"),
-        )?)
+        // Quick actions
+        .item(&quick_actions_submenu)
         .separator()
+        // Input configuration
         .item(&microphone_submenu)
+        .separator()
+        // Settings & configuration
         .item(&MenuItem::with_id(
             app,
             "shortcuts",
-            "Shortcuts",
+            "Keyboard Shortcuts...",
             true,
             None::<&str>,
         )?)
-        .separator()
         .item(&MenuItem::with_id(
             app,
             "settings-tray",
-            "Settings",
+            "Preferences...",
             true,
-            None::<&str>,
+            Some("CmdOrCtrl+,"),
         )?)
         .separator()
-        .item(&MenuItem::with_id(
-            app,
-            "general-feedback",
-            "General feedback",
-            true,
-            None::<&str>,
-        )?)
+        // Help & updates
+        .item(&help_submenu)
         .separator()
+        // Exit
         .item(&MenuItem::with_id(
             app,
             "quit",
@@ -230,51 +253,74 @@ fn rebuild_tray_menu(app: &AppHandle, _model_manager: Arc<Mutex<LocalModelManage
 
     let microphone_submenu = microphone_submenu_builder.build()?;
 
-    // Rebuild the entire tray menu
-    let tray_menu = MenuBuilder::new(app)
-        .item(&MenuItem::with_id(app, "home", "Home", true, None::<&str>)?)
+    // Build quick actions submenu
+    let quick_actions_submenu = SubmenuBuilder::new(app, "Quick Actions")
+        .item(&MenuItem::with_id(
+            app,
+            "paste-last",
+            "Paste Last Transcript",
+            true,
+            Some("CmdOrCtrl+Shift+V"),
+        )?)
+        .build()?;
+
+    // Build help submenu
+    let help_submenu = SubmenuBuilder::new(app, "Help")
+        .item(&MenuItem::with_id(
+            app,
+            "general-feedback",
+            "Send Feedback...",
+            true,
+            None::<&str>,
+        )?)
+        .item(&MenuItem::with_id(
+            app,
+            "report-issue",
+            "Report Issue...",
+            true,
+            None::<&str>,
+        )?)
         .separator()
         .item(&MenuItem::with_id(
             app,
             "check-updates",
-            "Check for updates...",
+            "Check for Updates...",
             true,
             None::<&str>,
         )?)
+        .build()?;
+
+    // Rebuild the entire tray menu
+    let tray_menu = MenuBuilder::new(app)
+        // Primary action
+        .item(&MenuItem::with_id(app, "home", "Open Dicta", true, None::<&str>)?)
         .separator()
-        .item(&MenuItem::with_id(
-            app,
-            "paste-last",
-            "Paste last transcript",
-            true,
-            Some("CmdOrCtrl+Shift+V"),
-        )?)
+        // Quick actions
+        .item(&quick_actions_submenu)
         .separator()
+        // Input configuration
         .item(&microphone_submenu)
+        .separator()
+        // Settings & configuration
         .item(&MenuItem::with_id(
             app,
             "shortcuts",
-            "Shortcuts",
+            "Keyboard Shortcuts...",
             true,
             None::<&str>,
         )?)
-        .separator()
         .item(&MenuItem::with_id(
             app,
             "settings-tray",
-            "Settings",
+            "Preferences...",
             true,
-            None::<&str>,
+            Some("CmdOrCtrl+,"),
         )?)
         .separator()
-        .item(&MenuItem::with_id(
-            app,
-            "general-feedback",
-            "General feedback",
-            true,
-            None::<&str>,
-        )?)
+        // Help & updates
+        .item(&help_submenu)
         .separator()
+        // Exit
         .item(&MenuItem::with_id(
             app,
             "quit",
@@ -375,8 +421,20 @@ fn handle_tray_event(
             }
         }
         "check-updates" => {
-            // TODO: Implement update check
             logger::info("Check for updates clicked");
+            let app_clone = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = crate::features::updates::check_for_updates(app_clone).await {
+                    logger::error(&format!("Failed to check for updates: {}", e));
+                }
+            });
+        }
+        "report-issue" => {
+            logger::info("Report issue clicked");
+            let issue_url = "https://github.com/nitintf/dicta/issues/new";
+            if let Err(e) = open::that(issue_url) {
+                logger::error_with("Failed to open issues page", &[("error", &e.to_string())]);
+            }
         }
         "paste-last" => {
             logger::info("Paste last transcript clicked");

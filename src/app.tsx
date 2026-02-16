@@ -1,15 +1,8 @@
-import {
-  CircleCheck,
-  CircleX,
-  Info,
-  Loader2,
-  TriangleAlert,
-} from 'lucide-react'
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Toaster } from 'sonner'
 
 import { AppLayout } from './components/app-layout'
+import { AppToaster } from './components/app-toaster'
 import { ProtectedRoute } from './components/protected-route'
 import { HelpPage } from './features/help'
 import { HomePageContent } from './features/home'
@@ -20,6 +13,8 @@ import { SnippetsPage } from './features/snippets'
 import { VibesPage } from './features/vibes'
 import { VocabularyPage } from './features/vocabulary'
 import { useMicrophoneDeviceSync } from './hooks/use-microphone-device-sync'
+import { useUpdateChecker } from './hooks/use-update-checker'
+import { AnalyticsEvents, trackEvent } from './lib/analytics'
 import { ThemeProvider } from './providers/theme-provider'
 
 import './index.css'
@@ -33,40 +28,18 @@ function App() {
   // Sync microphone device changes from tray menu
   useMicrophoneDeviceSync()
 
+  // Handle update checking and notifications
+  useUpdateChecker()
+
+  // Track app launch
+  useEffect(() => {
+    trackEvent(AnalyticsEvents.APP_LAUNCHED)
+  }, [])
+
   return (
     <ThemeProvider defaultTheme="system">
       <BrowserRouter>
-        <Toaster
-          position="bottom-center"
-          gap={8}
-          closeButton
-          expand={false}
-          icons={{
-            success: <CircleCheck className="size-[18px] text-emerald-500" />,
-            error: <CircleX className="size-[18px] text-red-500" />,
-            info: <Info className="size-[18px] text-blue-500" />,
-            warning: <TriangleAlert className="size-[18px] text-amber-500" />,
-            loading: (
-              <Loader2 className="size-[18px] text-primary animate-spin" />
-            ),
-          }}
-          toastOptions={{
-            unstyled: true,
-            classNames: {
-              toast:
-                'group w-full flex items-center justify-start gap-3 p-4 pr-10 rounded-xl border border-border/50 bg-card/95 backdrop-blur-md shadow-lg shadow-black/10 relative [&>[data-icon]]:flex-shrink-0 [&>[data-content]]:flex-1',
-              title: 'text-sm font-medium text-foreground',
-              description: 'text-xs text-muted-foreground mt-0.5',
-              actionButton:
-                'bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 rounded-md hover:bg-primary/90 transition-colors',
-              cancelButton:
-                'bg-secondary text-secondary-foreground text-xs font-medium px-3 py-1.5 rounded-md hover:bg-secondary/80 transition-colors',
-              closeButton:
-                '!absolute !top-2 !right-2 !left-auto !bottom-auto !transform-none !bg-transparent !border-0 !shadow-none text-muted-foreground hover:text-foreground transition-colors !p-1 !rounded-md hover:!bg-muted/50',
-              icon: 'flex-shrink-0 !mr-0',
-            },
-          }}
-        />
+        <AppToaster />
         <Routes>
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route

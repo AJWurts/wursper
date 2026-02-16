@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { Store, load } from '@tauri-apps/plugin-store'
 import { create } from 'zustand'
 
+import { initAnalytics, setAnalyticsEnabled, analytics } from '@/lib/analytics'
 import { defaultSettings, type Settings } from './schema'
 
 import type { SettingsStore } from './types'
@@ -71,6 +72,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       }
 
       set({ settings, initialized: true })
+
+      // Initialize analytics based on settings
+      initAnalytics(settings.privacy.analytics)
     } catch (error) {
       console.error('Error initializing settings store:', error)
       set({ settings: defaultSettings, initialized: true })
@@ -286,6 +290,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
+
+      // Update analytics state
+      setAnalyticsEnabled(enabled)
+      analytics.trackSettingChange('analytics', enabled)
     } catch (error) {
       console.error('Error toggling analytics:', error)
     }
@@ -357,20 +365,30 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   },
 
   setPostProcessingModel: async (modelId: string | null) => {
+    console.log('📝 setPostProcessingModel called with:', modelId)
     try {
       const store = await getTauriStore()
+      const currentSettings = get().settings
+      console.log('   Current settings before update:', currentSettings.aiProcessing)
+
       const newSettings = {
-        ...get().settings,
+        ...currentSettings,
         aiProcessing: {
-          ...get().settings.aiProcessing,
+          ...currentSettings.aiProcessing,
           postProcessingModelId: modelId,
         },
       }
+      console.log('   New settings to save:', newSettings.aiProcessing)
+
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
+
+      // Verify by reading back from store
+      const verifyStore = await store.get('settings')
+      console.log('   ✅ Verified store contents:', (verifyStore as any)?.aiProcessing)
     } catch (error) {
-      console.error('Error setting post-processing model:', error)
+      console.error('❌ Error setting post-processing model:', error)
     }
   },
 

@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { DM_Sans, Instrument_Serif } from 'next/font/google'
 import './globals.css'
 
-// DM Sans - Modern geometric sans-serif (similar to Satoshi)
+// DM Sans - Clean geometric sans-serif
 const dmSans = DM_Sans({
   subsets: ['latin'],
   variable: '--font-satoshi',
@@ -64,7 +64,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${dmSans.variable} ${instrumentSerif.variable} font-sans antialiased`}
+        className={`${dmSans.variable} ${instrumentSerif.variable} font-sans antialiased bg-black`}
       >
         {/* Noise texture overlay */}
         <div className="noise-overlay" aria-hidden="true" />

@@ -9,6 +9,7 @@ const testimonials = [
     role: 'Software Engineer',
     company: 'Stripe',
     avatar: 'SC',
+    color: 'violet',
   },
   {
     quote: "As someone with RSI, Dicta has been life-changing. I can work full days without pain, and my productivity has actually increased.",
@@ -16,6 +17,7 @@ const testimonials = [
     role: 'Content Writer',
     company: 'Vercel',
     avatar: 'MR',
+    color: 'blue',
   },
   {
     quote: "The local processing means I can dictate sensitive client information without privacy concerns. Plus, it's incredibly accurate.",
@@ -23,6 +25,7 @@ const testimonials = [
     role: 'Legal Assistant',
     company: 'Morrison & Co',
     avatar: 'ET',
+    color: 'cyan',
   },
   {
     quote: "I was skeptical about voice typing, but the custom vocabulary feature learned all my technical terms in days. More accurate than my typing now.",
@@ -30,6 +33,7 @@ const testimonials = [
     role: 'Data Scientist',
     company: 'OpenAI',
     avatar: 'DP',
+    color: 'orange',
   },
   {
     quote: "The snippets feature is genius. I set up shortcuts for common responses and handle emails 3x faster. It's not just transcription, it's automation.",
@@ -37,6 +41,7 @@ const testimonials = [
     role: 'Customer Success',
     company: 'Linear',
     avatar: 'LA',
+    color: 'pink',
   },
   {
     quote: "Being open source gives me confidence that my data is safe. Plus, I've contributed a few features myself. The community is amazing!",
@@ -44,12 +49,42 @@ const testimonials = [
     role: 'Security Engineer',
     company: 'Cloudflare',
     avatar: 'AK',
+    color: 'violet',
   },
 ]
+
+const colorClasses = {
+  violet: {
+    star: 'text-violet-400',
+    avatar: 'bg-violet-500/10 border-violet-500/20 text-violet-400',
+    hover: 'from-violet-500/5',
+  },
+  blue: {
+    star: 'text-blue-400',
+    avatar: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
+    hover: 'from-blue-500/5',
+  },
+  cyan: {
+    star: 'text-cyan-400',
+    avatar: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400',
+    hover: 'from-cyan-500/5',
+  },
+  orange: {
+    star: 'text-orange-400',
+    avatar: 'bg-orange-500/10 border-orange-500/20 text-orange-400',
+    hover: 'from-orange-500/5',
+  },
+  pink: {
+    star: 'text-pink-400',
+    avatar: 'bg-pink-500/10 border-pink-500/20 text-pink-400',
+    hover: 'from-pink-500/5',
+  },
+}
 
 function TestimonialCard({ testimonial, index }: { testimonial: typeof testimonials[0]; index: number }) {
   const [isVisible, setIsVisible] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
+  const colors = colorClasses[testimonial.color as keyof typeof colorClasses]
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -72,14 +107,14 @@ function TestimonialCard({ testimonial, index }: { testimonial: typeof testimoni
     <div
       ref={cardRef}
       className={`
-        relative group rounded-2xl border border-border/50 bg-secondary/30 p-6
+        relative group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6
         overflow-hidden card-hover
         ${isVisible ? 'animate-fade-in-up' : 'opacity-0'}
       `}
       style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'forwards' }}
     >
       {/* Hover gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div className={`absolute inset-0 bg-gradient-to-br ${colors.hover} via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity`} />
 
       <div className="relative z-10 space-y-4">
         {/* Stars */}
@@ -87,7 +122,7 @@ function TestimonialCard({ testimonial, index }: { testimonial: typeof testimoni
           {[...Array(5)].map((_, i) => (
             <svg
               key={i}
-              className="w-4 h-4 text-primary fill-current"
+              className={`w-4 h-4 ${colors.star} fill-current`}
               viewBox="0 0 20 20"
             >
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -102,7 +137,7 @@ function TestimonialCard({ testimonial, index }: { testimonial: typeof testimoni
 
         {/* Author */}
         <div className="flex items-center gap-3 pt-2">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-primary text-sm font-semibold border border-primary/20">
+          <div className={`w-10 h-10 rounded-full ${colors.avatar} flex items-center justify-center text-sm font-semibold border`}>
             {testimonial.avatar}
           </div>
           <div>
@@ -122,8 +157,8 @@ export default function Reviews() {
     <section className="section-spacing relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/3 rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-primary/5 rounded-full blur-[120px]" />
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-violet-500/[0.02] rounded-full blur-[150px]" />
+        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-blue-500/[0.03] rounded-full blur-[120px]" />
       </div>
 
       <div className="container-default">
@@ -148,9 +183,9 @@ export default function Reviews() {
         {/* Social proof stats */}
         <div className="relative">
           {/* Glow */}
-          <div className="absolute inset-0 bg-primary/5 rounded-3xl blur-xl" />
+          <div className="absolute inset-0 bg-white/[0.02] rounded-3xl blur-xl" />
 
-          <div className="relative rounded-3xl border border-border/50 bg-secondary/30 p-8 md:p-12">
+          <div className="relative rounded-3xl border border-white/[0.06] bg-white/[0.02] p-8 md:p-12">
             <div className="grid md:grid-cols-4 gap-8 md:gap-4 text-center">
               {[
                 { value: '10K+', label: 'Active Users' },
@@ -160,7 +195,7 @@ export default function Reviews() {
               ].map((stat, i) => (
                 <div key={i} className="relative">
                   {i < 3 && (
-                    <div className="hidden md:block absolute right-0 top-1/2 -translate-y-1/2 w-px h-12 bg-border" />
+                    <div className="hidden md:block absolute right-0 top-1/2 -translate-y-1/2 w-px h-12 bg-white/[0.06]" />
                   )}
                   <div className="text-4xl md:text-5xl font-bold gradient-text mb-2">{stat.value}</div>
                   <div className="text-sm text-muted-foreground">{stat.label}</div>
