@@ -69,7 +69,7 @@ jobs:
   build:
     name: Build (${{ matrix.arch_name }})
     needs: create-release
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -77,9 +77,11 @@ jobs:
           - target: aarch64-apple-darwin
             arch: aarch64
             arch_name: Apple Silicon
+            runner: macos-14  # M1 runner for native ARM build
           - target: x86_64-apple-darwin
             arch: x86_64
             arch_name: Intel
+            runner: macos-13  # Intel runner for native x86_64 build
 
     steps:
       - uses: actions/checkout@v4
@@ -121,23 +123,26 @@ jobs:
         env:
           VERSION: ${{ needs.create-release.outputs.version }}
         run: |
+          # Store workspace root
+          WORKSPACE_ROOT="${GITHUB_WORKSPACE}"
+
           # Find build artifacts
           DMG_PATH=$(find src-tauri/target/${{ matrix.target }}/release/bundle/dmg -name "*.dmg" | head -n 1)
           APP_DIR="src-tauri/target/${{ matrix.target }}/release/bundle/macos"
           APP_BUNDLE=$(find "$APP_DIR" -maxdepth 1 -name "*.app" | head -n 1)
 
           # Create output directory
-          mkdir -p release-artifacts
+          mkdir -p "${WORKSPACE_ROOT}/release-artifacts"
 
           # Copy DMG
-          cp "$DMG_PATH" "release-artifacts/${APP_NAME}_${VERSION}_${{ matrix.arch }}.dmg"
+          cp "$DMG_PATH" "${WORKSPACE_ROOT}/release-artifacts/${APP_NAME}_${VERSION}_${{ matrix.arch }}.dmg"
 
-          # Create app.tar.gz for updater
+          # Create app.tar.gz for updater (use absolute path for output)
           cd "$APP_DIR"
           APP_NAME_BUNDLE=$(basename "$APP_BUNDLE")
-          COPYFILE_DISABLE=1 tar -czf "../../../release-artifacts/${APP_NAME}_${VERSION}_${{ matrix.arch }}.app.tar.gz" \
+          COPYFILE_DISABLE=1 tar -czf "${WORKSPACE_ROOT}/release-artifacts/${APP_NAME}_${VERSION}_${{ matrix.arch }}.app.tar.gz" \
             --exclude='._*' --exclude='.DS_Store' "$APP_NAME_BUNDLE"
-          cd -
+          cd "${WORKSPACE_ROOT}"
 
           echo "dmg=release-artifacts/${APP_NAME}_${VERSION}_${{ matrix.arch }}.dmg" >> $GITHUB_OUTPUT
           echo "tar=release-artifacts/${APP_NAME}_${VERSION}_${{ matrix.arch }}.app.tar.gz" >> $GITHUB_OUTPUT
