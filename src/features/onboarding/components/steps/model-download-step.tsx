@@ -1,16 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import {
-  Download,
-  Check,
-  AlertCircle,
-  ArrowRight,
-  HardDrive,
-  Wifi,
-  Lock,
-  Cpu,
-} from 'lucide-react'
-import { motion } from 'motion/react'
+import { Download, Check, AlertCircle, ArrowRight } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -28,24 +18,6 @@ interface DownloadProgress {
   percentage: number
   modelId: string
 }
-
-const features = [
-  {
-    icon: HardDrive,
-    title: 'Runs Locally',
-    description: 'No internet after download',
-  },
-  {
-    icon: Lock,
-    title: 'Private',
-    description: 'Audio stays on device',
-  },
-  {
-    icon: Wifi,
-    title: 'No API Costs',
-    description: 'Unlimited & free forever',
-  },
-]
 
 export function ModelDownloadStep() {
   const { completeCurrentStepAndGoNext, markStepComplete } = useOnboarding()
@@ -165,199 +137,134 @@ export function ModelDownloadStep() {
 
   return (
     <div className="flex flex-col items-center text-center">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="mb-10"
-      >
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-white mb-4">
-          Download AI Model
-        </h1>
-        <p className="text-base text-white/50 max-w-md mx-auto leading-relaxed">
-          Get Whisper Tiny for fast, private transcription directly on your
-          device.
-        </p>
-      </motion.div>
-
-      {/* Model Icon with glow */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.1, duration: 0.5 }}
-        className="relative mb-10"
-      >
-        {/* Glow effect */}
-        <div className="absolute inset-0 blur-3xl bg-primary/20 rounded-full scale-150 -z-10" />
-
-        <motion.div
-          animate={
-            isDownloaded
-              ? {}
-              : isDownloading
-                ? { rotate: 360 }
-                : { scale: [1, 1.05, 1] }
-          }
-          transition={
-            isDownloading
-              ? { duration: 2, repeat: Infinity, ease: 'linear' }
-              : { duration: 2, repeat: Infinity, ease: 'easeInOut' }
-          }
+      {/* Icon */}
+      <div className="mb-8">
+        <div
           className={`
-            relative flex items-center justify-center w-28 h-28 rounded-2xl
+            flex items-center justify-center w-20 h-20 rounded-2xl
+            transition-colors duration-300
             ${
               isDownloaded
-                ? 'bg-primary/20 border border-primary/30'
-                : 'bg-white/5 border border-white/10'
+                ? 'bg-primary/10 border border-primary/30'
+                : 'bg-zinc-900 border border-zinc-800'
             }
-            transition-colors duration-500
           `}
         >
           {isDownloaded ? (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-            >
-              <Check className="w-12 h-12 text-primary" strokeWidth={2} />
-            </motion.div>
-          ) : isDownloading ? (
-            <Cpu className="w-12 h-12 text-primary" strokeWidth={1.5} />
+            <Check className="w-8 h-8 text-primary" strokeWidth={2} />
           ) : (
-            <Download className="w-12 h-12 text-white/60" strokeWidth={1.5} />
+            <Download
+              className={`w-8 h-8 ${isDownloading ? 'text-primary' : 'text-muted-foreground'}`}
+              strokeWidth={1.5}
+            />
           )}
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
 
-      {/* Model name and size */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.5 }}
-        className="mb-8"
-      >
-        <h3 className="text-xl font-semibold text-white mb-1">Whisper Tiny</h3>
-        <p className="text-sm text-white/40">75 MB • Fast & lightweight</p>
-      </motion.div>
+      {/* Title */}
+      <h1 className="text-3xl font-semibold tracking-tight mb-3">
+        Download AI Model
+      </h1>
+
+      {/* Subtitle */}
+      <p className="text-muted-foreground mb-6 max-w-sm">
+        Get Whisper Tiny for fast, private transcription directly on your
+        device.
+      </p>
+
+      {/* Model info */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
+        <span className="font-medium text-foreground">Whisper Tiny</span>
+        <span className="text-zinc-600">·</span>
+        <span>75 MB</span>
+        <span className="text-zinc-600">·</span>
+        <span>Fast & lightweight</span>
+      </div>
 
       {/* Progress section */}
       {isDownloading && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-sm mb-8"
-        >
-          <div className="flex justify-between text-sm mb-3">
-            <span className="text-white/50">Downloading...</span>
-            <span className="text-white/70 font-medium">
+        <div className="w-full max-w-sm mb-8">
+          <div className="flex justify-between text-sm mb-2">
+            <span className="text-muted-foreground">Downloading...</span>
+            <span className="text-foreground font-medium">
               {downloadedMB} / {totalMB} MB
             </span>
           </div>
-          <div className="relative h-2 rounded-full bg-white/10 overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.3 }}
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-emerald-400 rounded-full"
-            />
-            {/* Shimmer effect */}
-            <motion.div
-              animate={{ x: ['-100%', '200%'] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-              className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+          <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-300"
+              style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-xs text-white/30 mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             {progress.toFixed(0)}% complete
           </p>
-        </motion.div>
+        </div>
       )}
 
       {/* Error */}
       {error && !isDownloaded && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 mb-8 max-w-sm text-left"
-        >
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 mb-8 max-w-sm text-left">
           <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-red-400">Download failed</p>
             <p className="text-xs text-red-400/70 mt-1">{error}</p>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Success message */}
       {isDownloaded && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 border border-primary/20 mb-8"
-        >
-          <Check className="w-5 h-5 text-primary" strokeWidth={2.5} />
-          <div className="text-left">
-            <p className="text-sm font-medium text-primary">Model ready</p>
-            <p className="text-xs text-primary/70">
-              Whisper Tiny is installed and ready to use
-            </p>
-          </div>
-        </motion.div>
+        <div className="flex items-center gap-2 mb-8 text-sm">
+          <Check className="w-4 h-4 text-primary" strokeWidth={2.5} />
+          <span className="text-primary font-medium">Model ready</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-muted-foreground">Whisper Tiny installed</span>
+        </div>
       )}
 
       {/* Features */}
       {!isDownloading && !isDownloaded && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.5 }}
-          className="flex items-center justify-center gap-8 mb-10 text-sm text-white/40"
-        >
-          {features.map((feature, index) => (
-            <motion.div
-              key={feature.title}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 + index * 0.1 }}
-              className="flex items-center gap-2"
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-              <span>{feature.title}</span>
-            </motion.div>
-          ))}
-        </motion.div>
+        <div className="flex items-center justify-center gap-6 mb-8 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+            <span>Runs Locally</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+            <span>100% Private</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+            <span>No API Costs</span>
+          </div>
+        </div>
       )}
 
       {/* CTA */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4, duration: 0.5 }}
+      <Button
+        onClick={isDownloaded ? handleContinue : handleDownload}
+        disabled={isDownloading}
+        className="h-11 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
       >
-        <Button
-          onClick={isDownloaded ? handleContinue : handleDownload}
-          disabled={isDownloading}
-          size="lg"
-          className="h-12 px-8 text-sm font-medium bg-primary hover:bg-primary/90 text-black gap-2 group"
-        >
-          {isDownloaded ? (
-            <>
-              Continue
-              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-            </>
-          ) : isDownloading ? (
-            'Downloading...'
-          ) : error ? (
-            'Try Again'
-          ) : (
-            <>
-              Download Model
-              <span className="text-black/50 font-normal">75 MB</span>
-            </>
-          )}
-        </Button>
-      </motion.div>
+        {isDownloaded ? (
+          <>
+            Continue
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </>
+        ) : isDownloading ? (
+          'Downloading...'
+        ) : error ? (
+          'Try Again'
+        ) : (
+          <>
+            Download Model
+            <span className="text-primary-foreground/60 font-normal ml-2">
+              75 MB
+            </span>
+          </>
+        )}
+      </Button>
     </div>
   )
 }

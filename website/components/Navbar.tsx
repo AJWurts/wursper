@@ -130,17 +130,15 @@ export default function Navbar() {
           <div className="hidden sm:block w-px h-5 bg-border" />
 
           {/* Download CTA */}
-          <a
-            href="https://github.com/nitintf/dicta/releases/latest"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/download"
             className="group bg-foreground text-background font-medium px-4 py-2.5 rounded-lg text-sm flex items-center gap-2 hover:bg-white/90 transition-all"
           >
             <span>Download</span>
             <svg className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
             </svg>
-          </a>
+          </Link>
 
           {/* Mobile menu button */}
           <button

@@ -125,12 +125,34 @@
   * {
     @apply border-border outline-ring/50;
   }
+
+  /* Disable text selection globally for native app feel */
+  html {
+    overscroll-behavior: none;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
   body {
     @apply bg-background text-foreground;
     overscroll-behavior: none;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
   }
-  html {
-    overscroll-behavior: none;
+
+  /* Allow text selection in inputs and textareas */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Disable elastic scroll on all scrollable containers */
+  * {
+    overscroll-behavior: contain;
   }
 }
 

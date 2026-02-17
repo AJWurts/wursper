@@ -175,9 +175,7 @@ export default function Hero() {
         {/* CTA Buttons */}
         <div className="flex flex-col md:flex-row items-center justify-center gap-4 opacity-0 animate-fade-in delay-200" style={{ animationFillMode: 'forwards' }}>
           <a
-            href="https://github.com/nitintf/dicta/releases/latest"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/download"
             className="group bg-foreground text-background font-medium px-8 py-4 rounded-xl text-base flex items-center gap-4 hover:bg-white/90 transition-all"
           >
             <span>Download for Mac</span>

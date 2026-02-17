@@ -63,9 +63,7 @@ export default function Pricing() {
             {/* CTA */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
-                href="https://github.com/nitintf/dicta/releases/latest"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/download"
                 className="group bg-foreground text-background font-medium px-8 py-4 rounded-xl text-base flex items-center justify-center gap-3 hover:bg-white/90 transition-all"
               >
                 <span>Download for Mac</span>

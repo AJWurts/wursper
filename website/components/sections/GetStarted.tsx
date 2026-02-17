@@ -121,9 +121,7 @@ export default function GetStarted() {
           {/* CTAs */}
           <div className="flex gap-3 pt-4">
             <a
-              href="https://github.com/nitintf/dicta/releases/latest"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/download"
               className="group bg-foreground text-background font-medium px-6 py-3 rounded-lg text-sm flex items-center gap-3 hover:bg-white/90 transition-all"
             >
               <span>Download</span>

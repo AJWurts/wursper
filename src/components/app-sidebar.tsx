@@ -5,6 +5,7 @@ import {
   Settings,
   SquareBottomDashedScissors,
   BookOpen,
+  Sparkles,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
@@ -112,6 +113,24 @@ export function AppSidebar() {
         <SidebarFooter className="pb-4">
           <SidebarSeparator className="mb-1" />
           <SidebarMenu>
+            {/* Dev-only onboarding link for testing */}
+            {import.meta.env.DEV && (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  tooltip="Onboarding (Dev)"
+                  className="flex items-center gap-2.5"
+                >
+                  <Link to="/onboarding">
+                    <Sparkles className="h-4 w-4" strokeWidth={1.75} />
+                    <span>Onboarding</span>
+                    <span className="ml-auto text-[9px] text-amber-500/70 font-medium">
+                      DEV
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
               <SidebarMenuButton
                 onClick={() => setSettingsOpen(true)}

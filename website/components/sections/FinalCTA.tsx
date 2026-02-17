@@ -85,9 +85,7 @@ export default function FinalCTA() {
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
           <a
-            href="https://github.com/nitintf/dicta/releases/latest"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/download"
             className="group bg-foreground text-background font-medium px-8 py-4 rounded-xl text-base flex items-center gap-4 hover:bg-white/90 transition-all w-full sm:w-auto justify-center"
           >
             <span>Download for Mac</span>
