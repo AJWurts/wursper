@@ -16,6 +16,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: write
+
 env:
   APP_NAME: Dicta
   GITHUB_REPO: nitintf/dicta
