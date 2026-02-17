@@ -29,9 +29,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get-version.outputs.version }}
-      release_id: ${{ steps.create-release.outputs.id }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get version from tag or input
         id: get-version
@@ -43,17 +44,30 @@ jobs:
           fi
 
       - name: Create draft release
-        id: create-release
         if: ${{ !inputs.dry_run }}
-        uses: softprops/action-gh-release@v2
+        id: create_release
+        uses: comnoco/create-release-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.get-version.outputs.version }}
-          name: ${{ env.APP_NAME }} v${{ steps.get-version.outputs.version }}
+          release_name: ${{ env.APP_NAME }} v${{ steps.get-version.outputs.version }}
+          body: |
+            ## What's Changed
+
+            See the full changelog for details.
+
+            ## Downloads
+
+            | Platform | Download |
+            |----------|----------|
+            | macOS (Apple Silicon) | `${{ env.APP_NAME }}_${{ steps.get-version.outputs.version }}_aarch64.dmg` |
+            | macOS (Intel) | `${{ env.APP_NAME }}_${{ steps.get-version.outputs.version }}_x86_64.dmg` |
           draft: true
-          generate_release_notes: true
+          prerelease: false
 
   build:
-    name: Build (${{ matrix.target }})
+    name: Build (${{ matrix.arch_name }})
     needs: create-release
     runs-on: macos-latest
     strategy:
@@ -129,7 +143,7 @@ jobs:
           echo "tar=release-artifacts/${APP_NAME}_${VERSION}_${{ matrix.arch }}.app.tar.gz" >> $GITHUB_OUTPUT
 
       - name: Sign update artifact
-        if: ${{ env.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        if: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -163,7 +177,6 @@ jobs:
         run: ls -la artifacts/
 
       - name: Read signatures and create latest.json
-        id: signatures
         env:
           VERSION: ${{ needs.create-release.outputs.version }}
         run: |
