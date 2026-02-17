@@ -35,7 +35,9 @@ use features::shortcuts::{
     update_paste_shortcut, update_ptt_shortcut, update_voice_input_shortcut,
     RecordingShortcutHandler, ShortcutManager,
 };
-use features::transcription::{get_last_transcript, paste_last_transcript, transcribe_and_process, transcribe_uploaded_file};
+use features::transcription::{
+    get_last_transcript, paste_last_transcript, transcribe_and_process, transcribe_uploaded_file,
+};
 use features::updates::{check_for_updates, download_and_install_update};
 use utils::logger;
 

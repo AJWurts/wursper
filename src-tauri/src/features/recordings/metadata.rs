@@ -77,7 +77,7 @@ fn default_source_type() -> SourceType {
 pub enum SourceType {
     #[default]
     Recording, // Voice recording from microphone
-    Upload,    // Uploaded audio file
+    Upload, // Uploaded audio file
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

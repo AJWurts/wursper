@@ -75,7 +75,10 @@ pub async fn start_recording(
         current_state,
         RecordingState::Starting | RecordingState::Stopping | RecordingState::Transcribing
     ) {
-        log::warn!("Cannot start recording - operation in progress: {:?}", current_state);
+        log::warn!(
+            "Cannot start recording - operation in progress: {:?}",
+            current_state
+        );
         return Ok(RecordingResponse {
             success: false,
             state: current_state,

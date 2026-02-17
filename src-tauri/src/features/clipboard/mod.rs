@@ -53,7 +53,9 @@ pub async fn get_focused_app() -> Result<FocusedApp, String> {
                 .map_err(|e| format!("Failed to get focused app: {}", e))
         })
         .await
-        .map_err(|_| "Timed out getting focused app - System Events may be unresponsive".to_string())??;
+        .map_err(|_| {
+            "Timed out getting focused app - System Events may be unresponsive".to_string()
+        })??;
 
         let result = String::from_utf8_lossy(&output.stdout);
         let parts: Vec<&str> = result.trim().split('|').collect();

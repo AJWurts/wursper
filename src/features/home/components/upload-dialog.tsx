@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { FileAudio, Upload, X, Loader2 } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -11,8 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { cn } from '@/lib/cn'
 import { useTranscriptionsStore } from '@/features/transcriptions'
+import { cn } from '@/lib/cn'
 
 import type { UploadTranscriptionResponse } from '@/features/transcriptions/types/generated'
 
@@ -195,7 +195,9 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
                   <FileAudio className="w-4 h-4 text-muted-foreground" />
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden">
-                  <p className="text-sm font-medium truncate max-w-[280px]">{file.name}</p>
+                  <p className="text-sm font-medium truncate max-w-[280px]">
+                    {file.name}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {formatFileSize(file.size)}
                   </p>
@@ -228,9 +230,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
           </div>
 
           {/* Error message */}
-          {error && (
-            <p className="mt-2 text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
         </div>
 
         <DialogFooter>

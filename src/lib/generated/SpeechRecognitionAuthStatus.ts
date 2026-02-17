@@ -3,4 +3,8 @@
 /**
  * Speech recognition authorization status
  */
-export type SpeechRecognitionAuthStatus = "notDetermined" | "denied" | "restricted" | "authorized";
+export type SpeechRecognitionAuthStatus =
+  | 'notDetermined'
+  | 'denied'
+  | 'restricted'
+  | 'authorized'
