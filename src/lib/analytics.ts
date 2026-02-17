@@ -36,7 +36,9 @@ export function initAnalytics(enabled: boolean): void {
   }
 
   if (!POSTHOG_KEY) {
-    console.log('[Analytics] PostHog key not configured, skipping initialization')
+    console.log(
+      '[Analytics] PostHog key not configured, skipping initialization'
+    )
     return
   }
 

@@ -355,7 +355,10 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       })
 
       const settingsStore = useSettingsStore.getState()
-      console.log('   Current AI settings:', settingsStore.settings.aiProcessing)
+      console.log(
+        '   Current AI settings:',
+        settingsStore.settings.aiProcessing
+      )
 
       // Enable AI processing if not already enabled
       if (!settingsStore.settings.aiProcessing.enabled) {

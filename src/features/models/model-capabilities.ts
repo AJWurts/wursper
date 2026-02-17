@@ -1,4 +1,8 @@
-import type { ModelCapabilities, PostProcessingCapabilities, ModelProvider } from './types'
+import type {
+  ModelCapabilities,
+  PostProcessingCapabilities,
+  ModelProvider,
+} from './types'
 
 export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   // OpenAI Whisper
@@ -364,7 +368,10 @@ export function getProviderCapabilitySummary(provider: ModelProvider): string {
 }
 
 // Post-processing model capabilities
-export const POST_PROCESSING_CAPABILITIES: Record<string, PostProcessingCapabilities> = {
+export const POST_PROCESSING_CAPABILITIES: Record<
+  string,
+  PostProcessingCapabilities
+> = {
   // Cloud models - Best quality
   'claude-3-5-sonnet-20241022': {
     quality: 'best',
@@ -461,38 +468,21 @@ export const POST_PROCESSING_CAPABILITIES: Record<string, PostProcessingCapabili
       'Basic formatting',
       'Punctuation',
     ],
-    limitations: [
-      'May miss complex formatting',
-      'Limited list detection',
-    ],
+    limitations: ['May miss complex formatting', 'Limited list detection'],
     note: 'Good for basic punctuation, limited formatting',
   },
   'llm-llama-3.2-3b-instruct': {
     quality: 'basic',
     speed: 'fast',
-    features: [
-      'Offline processing',
-      'No API costs',
-      'Basic formatting',
-    ],
-    limitations: [
-      'May miss complex formatting',
-      'Limited list detection',
-    ],
+    features: ['Offline processing', 'No API costs', 'Basic formatting'],
+    limitations: ['May miss complex formatting', 'Limited list detection'],
     note: 'Compact but limited formatting ability',
   },
   'llm-qwen2.5-3b-instruct': {
     quality: 'basic',
     speed: 'fast',
-    features: [
-      'Offline processing',
-      'No API costs',
-      'Basic formatting',
-    ],
-    limitations: [
-      'May miss complex formatting',
-      'Limited list detection',
-    ],
+    features: ['Offline processing', 'No API costs', 'Basic formatting'],
+    limitations: ['May miss complex formatting', 'Limited list detection'],
     note: 'Compact but limited formatting ability',
   },
 }

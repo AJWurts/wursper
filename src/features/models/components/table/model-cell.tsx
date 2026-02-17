@@ -10,7 +10,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-import { getModelCapabilities, getPostProcessingCapabilities } from '../../model-capabilities'
+import {
+  getModelCapabilities,
+  getPostProcessingCapabilities,
+} from '../../model-capabilities'
 import { getProviderInfo } from '../../provider-info'
 import { ModelInfoTooltip } from '../model-info-tooltip'
 import { PostProcessingInfoTooltip } from '../post-processing-info-tooltip'

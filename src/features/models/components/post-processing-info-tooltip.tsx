@@ -12,7 +12,9 @@ interface PostProcessingInfoTooltipProps {
   capabilities?: PostProcessingCapabilities
 }
 
-export function PostProcessingInfoTooltip({ capabilities }: PostProcessingInfoTooltipProps) {
+export function PostProcessingInfoTooltip({
+  capabilities,
+}: PostProcessingInfoTooltipProps) {
   if (!capabilities) return null
 
   const getQualityColor = (quality: string) => {

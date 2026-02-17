@@ -1,4 +1,10 @@
-import { CircleCheck, CircleX, Info, Loader2, TriangleAlert } from 'lucide-react'
+import {
+  CircleCheck,
+  CircleX,
+  Info,
+  Loader2,
+  TriangleAlert,
+} from 'lucide-react'
 import { Toaster } from 'sonner'
 
 export function AppToaster() {
