@@ -1,4 +1,5 @@
-import { Check, AlertCircle, ArrowRight, Mic } from 'lucide-react'
+import { Check, ArrowRight, Mic, ExternalLink } from 'lucide-react'
+import { useState, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { usePermissionPolling } from '@/hooks/use-permission-polling'
@@ -8,25 +9,44 @@ import { useOnboarding } from '../../hooks/use-onboarding'
 
 export function AccessibilityStep() {
   const { completeCurrentStepAndGoNext, markStepComplete } = useOnboarding()
-  const { permissions, requestAccessibilityPermission } = usePermissions()
+  const { permissions, requestAccessibilityPermission, checkPermissions } =
+    usePermissions()
+  const [hasRequestedOnce, setHasRequestedOnce] = useState(false)
+  const [isChecking, setIsChecking] = useState(false)
 
   usePermissionPolling(true, 2000)
 
   const isGranted = permissions?.accessibility === 'granted'
-  const isDenied = permissions?.accessibility === 'denied'
+  // After requesting once, treat 'unknown' as potentially granted (user may need to verify)
+  const showManualVerify =
+    hasRequestedOnce && !isGranted && permissions?.accessibility === 'unknown'
+
+  // Auto-complete if granted
+  useEffect(() => {
+    if (isGranted) {
+      markStepComplete('accessibility')
+    }
+  }, [isGranted, markStepComplete])
 
   const handleRequest = async () => {
-    const granted = await requestAccessibilityPermission()
-    if (granted) {
-      markStepComplete('accessibility')
-      completeCurrentStepAndGoNext()
-    }
+    setHasRequestedOnce(true)
+    await requestAccessibilityPermission()
+  }
+
+  const handleCheckAgain = async () => {
+    setIsChecking(true)
+    await checkPermissions()
+    setIsChecking(false)
   }
 
   const handleContinue = () => {
-    if (isGranted) {
-      completeCurrentStepAndGoNext()
-    }
+    completeCurrentStepAndGoNext()
+  }
+
+  // Allow skipping if user has already tried granting
+  // (macOS accessibility permissions are notoriously unreliable to detect)
+  const handleSkipForNow = () => {
+    completeCurrentStepAndGoNext()
   }
 
   return (
@@ -112,23 +132,24 @@ export function AccessibilityStep() {
         </div>
       )}
 
-      {isDenied && !isGranted && (
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 mb-8 max-w-sm text-left">
-          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+      {/* Manual verification needed */}
+      {showManualVerify && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 mb-8 max-w-sm text-left">
+          <ExternalLink className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-amber-400">
-              Permission needed
+            <p className="text-sm font-medium text-blue-400">
+              Enabled in System Settings?
             </p>
-            <p className="text-xs text-amber-400/70 mt-1">
-              Open System Settings → Privacy & Security → Accessibility and
-              enable Dicta
+            <p className="text-xs text-blue-400/70 mt-1">
+              If you've enabled Dicta in Accessibility settings, click "I've
+              Enabled It" to continue.
             </p>
           </div>
         </div>
       )}
 
       {/* Info features */}
-      {!isGranted && !isDenied && (
+      {!isGranted && !showManualVerify && (
         <div className="flex items-center justify-center gap-6 mb-8 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -145,20 +166,51 @@ export function AccessibilityStep() {
         </div>
       )}
 
-      {/* CTA */}
-      <Button
-        onClick={isGranted ? handleContinue : handleRequest}
-        className="h-11 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
-      >
+      {/* CTA Buttons */}
+      <div className="flex flex-col gap-3">
         {isGranted ? (
-          <>
+          <Button
+            onClick={handleContinue}
+            className="h-11 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+          >
             Finish Setup
             <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        ) : showManualVerify ? (
+          <>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleCheckAgain}
+                variant="outline"
+                disabled={isChecking}
+                className="h-11 px-6"
+              >
+                {isChecking ? 'Checking...' : 'Check Again'}
+              </Button>
+              <Button
+                onClick={handleSkipForNow}
+                className="h-11 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+              >
+                I've Enabled It
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+            <button
+              onClick={handleRequest}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Open System Settings again
+            </button>
           </>
         ) : (
-          'Grant Accessibility Access'
+          <Button
+            onClick={handleRequest}
+            className="h-11 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+          >
+            Grant Accessibility Access
+          </Button>
         )}
-      </Button>
+      </div>
     </div>
   )
 }
