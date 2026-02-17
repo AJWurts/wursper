@@ -81,7 +81,7 @@ jobs:
           - target: x86_64-apple-darwin
             arch: x86_64
             arch_name: Intel
-            runner: macos-13  # Intel runner for native x86_64 build
+            runner: macos-latest  # Intel cross-compile on latest runner
 
     steps:
       - uses: actions/checkout@v4
