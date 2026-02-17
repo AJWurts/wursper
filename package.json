@@ -23,7 +23,9 @@
     "release:minor": "./scripts/release.sh minor",
     "release:major": "./scripts/release.sh major",
     "release:dry": "./scripts/release.sh patch --dry-run",
-    "version:bump": "./scripts/bump-version.sh"
+    "version:bump:patch": "./scripts/bump-version.sh patch",
+    "version:bump:minor": "./scripts/bump-version.sh minor",
+    "version:bump:major": "./scripts/bump-version.sh major"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
