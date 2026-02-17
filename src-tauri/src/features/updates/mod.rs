@@ -88,7 +88,10 @@ pub async fn check_for_updates(app: AppHandle) -> Result<Option<UpdateInfo>, Str
             log::warn!("Update check failed: {}", error_msg);
 
             // Check if it's a "no release" error (404 or decoding error)
-            if error_msg.contains("decoding") || error_msg.contains("404") || error_msg.contains("Not Found") {
+            if error_msg.contains("decoding")
+                || error_msg.contains("404")
+                || error_msg.contains("Not Found")
+            {
                 log::info!("No releases available yet - this is expected for new apps");
                 // Treat as "no update available" instead of error
                 let _ = app.emit("update-status", UpdateStatus::NotAvailable);
@@ -132,15 +135,9 @@ pub async fn download_and_install_update(app: AppHandle) -> Result<(), String> {
                         percent,
                     };
 
-                    log::debug!(
-                        "Download progress: {:.1}%",
-                        percent.unwrap_or(0.0)
-                    );
+                    log::debug!("Download progress: {:.1}%", percent.unwrap_or(0.0));
 
-                    let _ = app_clone.emit(
-                        "update-status",
-                        UpdateStatus::Downloading { progress },
-                    );
+                    let _ = app_clone.emit("update-status", UpdateStatus::Downloading { progress });
                 },
                 move || {
                     log::info!("Download complete, preparing to install...");

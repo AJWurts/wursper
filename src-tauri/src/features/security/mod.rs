@@ -29,19 +29,27 @@ fn ensure_cache_initialized() {
 /// Check if we've already checked this model's key (regardless of result)
 fn is_cached(model_id: &str) -> bool {
     let cache = API_KEY_CACHE.read().unwrap();
-    cache.as_ref().map(|c| c.contains_key(model_id)).unwrap_or(false)
+    cache
+        .as_ref()
+        .map(|c| c.contains_key(model_id))
+        .unwrap_or(false)
 }
 
 /// Get API key from cache (returns None if not cached OR if cached as "no key")
 fn get_cached_key(model_id: &str) -> Option<String> {
     let cache = API_KEY_CACHE.read().unwrap();
-    cache.as_ref().and_then(|c| c.get(model_id).cloned()).flatten()
+    cache
+        .as_ref()
+        .and_then(|c| c.get(model_id).cloned())
+        .flatten()
 }
 
 /// Check if API key exists in cache
 fn has_cached_key(model_id: &str) -> Option<bool> {
     let cache = API_KEY_CACHE.read().unwrap();
-    cache.as_ref().and_then(|c| c.get(model_id).map(|v| v.is_some()))
+    cache
+        .as_ref()
+        .and_then(|c| c.get(model_id).map(|v| v.is_some()))
 }
 
 /// Store API key in cache
@@ -169,10 +177,7 @@ pub async fn sync_api_key_flags(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     };
 
-    let mut models = models_value
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
+    let mut models = models_value.as_array().cloned().unwrap_or_default();
 
     let mut synced_count = 0;
     let mut cached_count = 0;
@@ -229,7 +234,11 @@ pub async fn sync_api_key_flags(app: &AppHandle) -> Result<(), String> {
         store.save().map_err(|e| format!("Failed to save: {}", e))?;
     }
 
-    log::info!("Pre-cached {} API keys, synced {} flags", cached_count, synced_count);
+    log::info!(
+        "Pre-cached {} API keys, synced {} flags",
+        cached_count,
+        synced_count
+    );
 
     Ok(())
 }

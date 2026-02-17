@@ -11,8 +11,8 @@ pub mod candle_whisper;
 pub mod whisperkit;
 
 // LLM engines for post-processing
-pub mod llm_trait;
 pub mod llama;
+pub mod llm_trait;
 
 /// Status of a local model engine
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]

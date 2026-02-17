@@ -87,18 +87,18 @@ pub async fn validate_pre_recording(app: &AppHandle) -> Result<(), ValidationErr
     log::info!("=== PRE-RECORDING VALIDATION ===");
 
     // Get settings
-    let settings_store = app
-        .store("settings")
-        .map_err(|e| ValidationError::InternalError(format!("Failed to get settings store: {}", e)))?;
+    let settings_store = app.store("settings").map_err(|e| {
+        ValidationError::InternalError(format!("Failed to get settings store: {}", e))
+    })?;
 
     let settings = settings_store
         .get("settings")
         .ok_or_else(|| ValidationError::InternalError("No settings found".to_string()))?;
 
     // Get models store
-    let models_store = app
-        .store("models.json")
-        .map_err(|e| ValidationError::InternalError(format!("Failed to get models store: {}", e)))?;
+    let models_store = app.store("models.json").map_err(|e| {
+        ValidationError::InternalError(format!("Failed to get models store: {}", e))
+    })?;
 
     let models_value = models_store.get("models");
     let models = models_value
@@ -137,7 +137,9 @@ pub async fn validate_pre_recording(app: &AppHandle) -> Result<(), ValidationErr
 
                 log::info!(
                     "STT model: {} (provider: {}, hasApiKey flag: {})",
-                    model_name, provider, has_api_key_flag
+                    model_name,
+                    provider,
+                    has_api_key_flag
                 );
 
                 // Check if this provider requires an API key
@@ -146,7 +148,8 @@ pub async fn validate_pre_recording(app: &AppHandle) -> Result<(), ValidationErr
                     let has_key_in_keychain = security::has_api_key_internal(stt_model_id);
                     log::info!(
                         "Provider {} requires API key. Keychain check: {}",
-                        provider, has_key_in_keychain
+                        provider,
+                        has_key_in_keychain
                     );
 
                     if !has_key_in_keychain {
@@ -193,13 +196,11 @@ pub async fn validate_pre_recording(app: &AppHandle) -> Result<(), ValidationErr
                         .get("name")
                         .and_then(|v| v.as_str())
                         .unwrap_or(post_processing_model_id);
-                    let model_type = model_obj
-                        .get("type")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
+                    let model_type = model_obj.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
                     // Only check API key for cloud models
-                    if model_type == "cloud" && post_processing_provider_requires_api_key(provider) {
+                    if model_type == "cloud" && post_processing_provider_requires_api_key(provider)
+                    {
                         // Check if API key exists
                         if !security::has_api_key_internal(post_processing_model_id) {
                             return Err(ValidationError::PostProcessingApiKeyMissing {

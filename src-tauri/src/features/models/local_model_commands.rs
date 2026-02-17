@@ -32,7 +32,11 @@ pub async fn start_local_model(
     state: State<'_, LocalModelState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    log::info!("Starting local model: {} (engine: {})", model_id, engine_type);
+    log::info!(
+        "Starting local model: {} (engine: {})",
+        model_id,
+        engine_type
+    );
 
     // Update AI processing settings for LLM models
     if model_id.starts_with("llm-") || engine_type == "llama" {

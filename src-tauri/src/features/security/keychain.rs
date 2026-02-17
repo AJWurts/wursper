@@ -23,10 +23,7 @@ pub fn store_api_key_keychain(model_id: &str, api_key: &str) -> Result<(), Strin
         .set_password(api_key)
         .map_err(|e| format!("Failed to store API key in keychain: {}", e))?;
 
-    log::info!(
-        "Stored API key for model '{}' in keychain",
-        model_id
-    );
+    log::info!("Stored API key for model '{}' in keychain", model_id);
     Ok(())
 }
 

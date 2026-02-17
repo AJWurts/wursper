@@ -92,7 +92,10 @@ pub async fn migrate_legacy_api_keys(app: &AppHandle) -> Result<MigrationResult,
     let encryption_key = match legacy::get_encryption_key(app) {
         Ok(key) => Some(key),
         Err(e) => {
-            log::debug!("No encryption key found (likely no keys were ever stored): {}", e);
+            log::debug!(
+                "No encryption key found (likely no keys were ever stored): {}",
+                e
+            );
             None
         }
     };
@@ -136,11 +139,7 @@ pub async fn migrate_legacy_api_keys(app: &AppHandle) -> Result<MigrationResult,
                             }
                         }
                         Err(e) => {
-                            log::error!(
-                                "Failed to decrypt API key for '{}': {}",
-                                model_id,
-                                e
-                            );
+                            log::error!("Failed to decrypt API key for '{}': {}", model_id, e);
                             failed_count += 1;
                         }
                     }

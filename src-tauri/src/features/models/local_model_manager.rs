@@ -5,8 +5,8 @@ use super::engines::{
     ModelInfo, ModelStatus,
 };
 
-use super::engines::llm_trait::{GenerationConfig, LocalLLMEngine};
 use super::engines::llama::LlamaEngine;
+use super::engines::llm_trait::{GenerationConfig, LocalLLMEngine};
 
 #[cfg(target_os = "macos")]
 use super::engines::apple_speech::AppleSpeechEngine;

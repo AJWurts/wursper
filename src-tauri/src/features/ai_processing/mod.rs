@@ -132,7 +132,10 @@ fn build_simple_prompt(
         if !snips.is_empty() {
             prompt.push_str("TEXT REPLACEMENTS (MUST apply these exact substitutions):\n");
             for snip in snips {
-                prompt.push_str(&format!("• Replace \"{}\" with \"{}\"\n", snip.trigger, snip.expansion));
+                prompt.push_str(&format!(
+                    "• Replace \"{}\" with \"{}\"\n",
+                    snip.trigger, snip.expansion
+                ));
             }
             prompt.push_str("\n");
         }
@@ -141,10 +144,7 @@ fn build_simple_prompt(
     // Vocabulary
     if let Some(words) = vocabulary {
         if !words.is_empty() {
-            prompt.push_str(&format!(
-                "CORRECT SPELLINGS: {}\n\n",
-                words.join(", ")
-            ));
+            prompt.push_str(&format!("CORRECT SPELLINGS: {}\n\n", words.join(", ")));
         }
     }
 
@@ -168,7 +168,9 @@ fn build_simple_prompt(
     prompt.push_str("Output: Can you send me the report by Friday?\n\n");
 
     // Example 5: List with intro (common pattern)
-    prompt.push_str("Input: here are the tasks first review the code then write tests finally deploy\n");
+    prompt.push_str(
+        "Input: here are the tasks first review the code then write tests finally deploy\n",
+    );
     prompt.push_str("Output: Here are the tasks:\n- Review the code\n- Write tests\n- Deploy\n\n");
 
     prompt.push_str("Now format this transcript:");

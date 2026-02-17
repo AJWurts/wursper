@@ -61,12 +61,12 @@ const OUTPUT_PREFIXES: &[&str] = &[
 /// Model family for prompt formatting
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ModelFamily {
-    Llama,      // Llama 3.x models
-    Mistral,    // Mistral models
-    SmolLM,     // SmolLM2 models (ChatML format)
-    Qwen,       // Qwen2/2.5 models (ChatML format)
-    Gemma,      // Gemma models
-    Phi,        // Phi models
+    Llama,   // Llama 3.x models
+    Mistral, // Mistral models
+    SmolLM,  // SmolLM2 models (ChatML format)
+    Qwen,    // Qwen2/2.5 models (ChatML format)
+    Gemma,   // Gemma models
+    Phi,     // Phi models
     Unknown,
 }
 
@@ -173,16 +173,25 @@ impl LlamaEngine {
         // Remove any remaining special tokens (all model formats)
         let tokens_to_remove = [
             // ChatML
-            "<|im_start|>", "<|im_end|>",
+            "<|im_start|>",
+            "<|im_end|>",
             // Llama 3.x
-            "<|eot_id|>", "<|end_of_text|>", "<|begin_of_text|>",
-            "<|start_header_id|>", "<|end_header_id|>",
+            "<|eot_id|>",
+            "<|end_of_text|>",
+            "<|begin_of_text|>",
+            "<|start_header_id|>",
+            "<|end_header_id|>",
             // Gemma
-            "<end_of_turn>", "<start_of_turn>",
+            "<end_of_turn>",
+            "<start_of_turn>",
             // Phi
-            "<|end|>", "<|user|>", "<|system|>", "<|assistant|>",
+            "<|end|>",
+            "<|user|>",
+            "<|system|>",
+            "<|assistant|>",
             // Mistral
-            "[INST]", "[/INST]",
+            "[INST]",
+            "[/INST]",
         ];
         for token in tokens_to_remove {
             result = result.replace(token, "");
@@ -191,13 +200,21 @@ impl LlamaEngine {
         // Remove "assistant" if it appears at the start
         let mut trimmed = result.trim().to_string();
         if trimmed.starts_with("assistant") {
-            trimmed = trimmed.strip_prefix("assistant").unwrap_or(&trimmed).trim().to_string();
+            trimmed = trimmed
+                .strip_prefix("assistant")
+                .unwrap_or(&trimmed)
+                .trim()
+                .to_string();
         }
 
         // Strip output prefixes like "Here is the corrected text:"
         for prefix in OUTPUT_PREFIXES {
             if trimmed.starts_with(prefix) {
-                trimmed = trimmed.strip_prefix(prefix).unwrap_or(&trimmed).trim().to_string();
+                trimmed = trimmed
+                    .strip_prefix(prefix)
+                    .unwrap_or(&trimmed)
+                    .trim()
+                    .to_string();
                 break;
             }
         }
@@ -242,8 +259,7 @@ impl LocalLLMEngine for LlamaEngine {
 
         let backend = self.backend.as_ref().unwrap();
 
-        let model_params = LlamaModelParams::default()
-            .with_n_gpu_layers(99);
+        let model_params = LlamaModelParams::default().with_n_gpu_layers(99);
 
         let model = LlamaModel::load_from_file(backend, &config.model_path, &model_params)
             .map_err(|e| format!("Failed to load model: {}", e))?;
@@ -275,10 +291,7 @@ impl LocalLLMEngine for LlamaEngine {
         user_prompt: &str,
         config: GenerationConfig,
     ) -> Result<String, String> {
-        let model = self
-            .model
-            .as_ref()
-            .ok_or("No model loaded")?;
+        let model = self.model.as_ref().ok_or("No model loaded")?;
 
         let full_prompt = self.format_prompt(system_prompt, user_prompt);
 

@@ -189,10 +189,7 @@ async fn download_hf_model(
 
     // First, get the sizes of all files
     for file in &files {
-        let url = format!(
-            "https://huggingface.co/{}/resolve/main/{}",
-            repo_id, file
-        );
+        let url = format!("https://huggingface.co/{}/resolve/main/{}", repo_id, file);
         if let Ok(response) = client.head(&url).send().await {
             if let Some(size) = response.content_length() {
                 total_size += size;
@@ -218,10 +215,7 @@ async fn download_hf_model(
 
     // Download each file
     for file in &files {
-        let url = format!(
-            "https://huggingface.co/{}/resolve/main/{}",
-            repo_id, file
-        );
+        let url = format!("https://huggingface.co/{}/resolve/main/{}", repo_id, file);
 
         let response = client
             .get(&url)

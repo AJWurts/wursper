@@ -23,9 +23,8 @@ use features::audio::{
 use features::cache::SettingsCache;
 use features::data::{export_all_data, import_all_data, import_from_json};
 use features::models::{
-    auto_start_selected_models, delete_local_model, download_local_model, get_all_models,
-    debug_ai_settings, get_local_model_status, start_local_model, stop_local_model,
-    LocalModelManager,
+    auto_start_selected_models, debug_ai_settings, delete_local_model, download_local_model,
+    get_all_models, get_local_model_status, start_local_model, stop_local_model, LocalModelManager,
 };
 use features::recordings::{delete_recording, get_all_transcriptions, get_recording_audio_path};
 use features::security::{get_api_key, has_api_key, remove_api_key, store_api_key};
@@ -192,7 +191,8 @@ pub fn run() {
         let app_handle_migration = app.app_handle().clone();
         tauri::async_runtime::spawn(async move {
             // First, migrate any legacy keys
-            match features::security::migration::migrate_legacy_api_keys(&app_handle_migration).await
+            match features::security::migration::migrate_legacy_api_keys(&app_handle_migration)
+                .await
             {
                 Ok(result) => {
                     if result.migrated_count > 0 {
