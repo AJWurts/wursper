@@ -7,7 +7,9 @@
         <key>NSSpeechRecognitionUsageDescription</key>
         <string>Dicta uses speech recognition to convert your voice to text.</string>
         <key>NSAppleEventsUsageDescription</key>
-        <string>Dicta needs accessibility permissions to insert transcribed text at your cursor position.</string>
+        <string>Dicta needs to send keyboard events to paste transcribed text into other applications.</string>
+        <key>NSAccessibilityUsageDescription</key>
+        <string>Dicta needs accessibility permissions to paste transcribed text at your cursor position and detect the active application.</string>
         <key>NSCameraUseContinuityCameraDeviceType</key>
         <true/>
     </dict>

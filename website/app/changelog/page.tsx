@@ -36,15 +36,19 @@ async function getReleases(): Promise<Release[]> {
       name: release.name,
       body: release.body || '',
       publishedAt: release.published_at,
-      assets: (release.assets as Array<Record<string, unknown>>)?.filter(
-        (a: Record<string, unknown>) =>
-          (a.name as string).endsWith('.dmg') || (a.name as string).endsWith('.app.tar.gz')
-      ).map((a: Record<string, unknown>) => ({
-        name: a.name,
-        downloadCount: a.download_count,
-        size: a.size,
-        url: a.browser_download_url,
-      })) || [],
+      assets:
+        (release.assets as Array<Record<string, unknown>>)
+          ?.filter(
+            (a: Record<string, unknown>) =>
+              (a.name as string).endsWith('.dmg') ||
+              (a.name as string).endsWith('.app.tar.gz')
+          )
+          .map((a: Record<string, unknown>) => ({
+            name: a.name,
+            downloadCount: a.download_count,
+            size: a.size,
+            url: a.browser_download_url,
+          })) || [],
     }))
   } catch {
     return []
@@ -104,7 +108,9 @@ export default async function ChangelogPage() {
                 <span className="text-primary text-sm font-medium mb-4 block">
                   Changelog
                 </span>
-                <h1 className="text-display-lg mb-4">What&apos;s new in Dicta</h1>
+                <h1 className="text-display-lg mb-4">
+                  What&apos;s new in Dicta
+                </h1>
                 <p className="text-muted-foreground">
                   Track all updates, improvements, and bug fixes. Subscribe to{' '}
                   <a
@@ -132,7 +138,9 @@ export default async function ChangelogPage() {
 
                       {/* Header */}
                       <div className="flex flex-wrap items-center gap-3 mb-4">
-                        <h2 className="text-xl font-semibold">{release.tagName}</h2>
+                        <h2 className="text-xl font-semibold">
+                          {release.tagName}
+                        </h2>
                         {index === 0 && (
                           <span className="px-2 py-0.5 text-xs font-medium bg-primary/20 text-primary rounded">
                             Latest
@@ -149,24 +157,26 @@ export default async function ChangelogPage() {
                           Changes
                         </h3>
                         <ul className="space-y-2">
-                          {getVersionChanges(release.tagName).map((change, i) => (
-                            <li key={i} className="flex items-start gap-2">
-                              <svg
-                                className="w-4 h-4 text-primary mt-0.5 flex-shrink-0"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M5 13l4 4L19 7"
-                                />
-                              </svg>
-                              <span className="text-sm">{change}</span>
-                            </li>
-                          ))}
+                          {getVersionChanges(release.tagName).map(
+                            (change, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <svg
+                                  className="w-4 h-4 text-primary mt-0.5 flex-shrink-0"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                                <span className="text-sm">{change}</span>
+                              </li>
+                            )
+                          )}
                         </ul>
                       </div>
 
@@ -178,8 +188,8 @@ export default async function ChangelogPage() {
                           </h3>
                           <div className="grid gap-2">
                             {release.assets
-                              .filter((a) => a.name.endsWith('.dmg'))
-                              .map((asset) => (
+                              .filter(a => a.name.endsWith('.dmg'))
+                              .map(asset => (
                                 <a
                                   key={asset.name}
                                   href={asset.url}

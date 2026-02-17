@@ -6,6 +6,7 @@ use tauri::ActivationPolicy;
 use tauri_plugin_store::StoreExt;
 
 mod commands;
+mod error;
 mod features;
 mod menu;
 mod types;
@@ -17,8 +18,8 @@ use menu::rebuild_tray_menu_command;
 
 use features::ai_processing::post_process_transcript;
 use features::audio::{
-    cancel_recording, enumerate_audio_devices, get_recording_state, start_recording,
-    stop_recording, AudioRecorder, RecordingStateManager,
+    cancel_recording, enumerate_audio_devices, force_reset_recording, get_recording_state,
+    start_recording, stop_recording, AudioRecorder, RecordingStateManager,
 };
 use features::cache::SettingsCache;
 use features::data::{export_all_data, import_all_data, import_from_json};
@@ -34,7 +35,7 @@ use features::shortcuts::{
     update_paste_shortcut, update_ptt_shortcut, update_voice_input_shortcut,
     RecordingShortcutHandler, ShortcutManager,
 };
-use features::transcription::{get_last_transcript, paste_last_transcript, transcribe_and_process};
+use features::transcription::{get_last_transcript, paste_last_transcript, transcribe_and_process, transcribe_uploaded_file};
 use features::updates::{check_for_updates, download_and_install_update};
 use utils::logger;
 
@@ -66,8 +67,8 @@ pub fn run() {
     let local_model_manager = Arc::new(Mutex::new(LocalModelManager::new()));
     let shortcut_manager = ShortcutManager::new();
 
-    // Audio recording state
-    let audio_recorder = Arc::new(std::sync::Mutex::new(AudioRecorder::new()));
+    // Audio recording state (using parking_lot for faster locking)
+    let audio_recorder = Arc::new(parking_lot::Mutex::new(AudioRecorder::new()));
     let recording_state_manager = Arc::new(RecordingStateManager::new());
     let recording_shortcut_handler = Arc::new(RecordingShortcutHandler::new());
 
@@ -336,6 +337,7 @@ pub fn run() {
             stop_recording,
             cancel_recording,
             get_recording_state,
+            force_reset_recording,
             // Clipboard utilities
             features::clipboard::get_focused_app,
             // Shortcuts management
@@ -351,6 +353,7 @@ pub fn run() {
             // Transcription utilities
             get_last_transcript,
             paste_last_transcript,
+            transcribe_uploaded_file,
             // Recordings management
             get_all_transcriptions,
             delete_recording,

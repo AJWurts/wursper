@@ -3,13 +3,35 @@ use std::process::Command;
 
 fn get_sound_path(filename: &str) -> Result<PathBuf, String> {
     let locations = vec![
+        // Development: relative to project root
         PathBuf::from(format!("../public/{}", filename)),
+        // Development: current working directory
         {
             let mut path = std::env::current_dir().unwrap_or_default();
             path.push("public");
             path.push(filename);
             path
         },
+        // Production macOS: Resources/_up_/public/ (Tauri bundles ../public as _up_/public)
+        {
+            let exe_path = std::env::current_exe().unwrap_or_default();
+            let mut path = exe_path
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .to_path_buf();
+
+            #[cfg(target_os = "macos")]
+            if path.ends_with("MacOS") {
+                path.pop();
+                path.push("Resources");
+                path.push("_up_");
+                path.push("public");
+            }
+
+            path.push(filename);
+            path
+        },
+        // Fallback: Resources/ directly
         {
             let exe_path = std::env::current_exe().unwrap_or_default();
             let mut path = exe_path
@@ -43,7 +65,7 @@ fn get_sound_path(filename: &str) -> Result<PathBuf, String> {
 
 #[cfg(target_os = "macos")]
 pub fn play_sound(filename: &str) -> Result<(), String> {
-    play_sound_with_volume(filename, 0.5)
+    play_sound_with_volume(filename, 0.1)
 }
 
 #[cfg(target_os = "macos")]
@@ -73,7 +95,7 @@ pub fn play_sound_with_volume(filename: &str, volume: f32) -> Result<(), String>
 
 #[cfg(target_os = "windows")]
 pub fn play_sound(filename: &str) -> Result<(), String> {
-    play_sound_with_volume(filename, 0.5)
+    play_sound_with_volume(filename, 0.1)
 }
 
 #[cfg(target_os = "windows")]

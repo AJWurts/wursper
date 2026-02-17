@@ -1,11 +1,32 @@
 use super::player::{play_error_sound, play_recording_start_sound, play_recording_stop_sound};
 use super::recorder::AudioRecorder;
 use super::state::{RecordingState, RecordingStateManager};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tauri::{command, AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
 use ts_rs::TS;
+
+// Debounce duration to prevent rapid toggling
+const COMMAND_DEBOUNCE_MS: u64 = 300;
+
+// Lock timeout duration
+const LOCK_TIMEOUT: Duration = Duration::from_secs(2);
+
+// Global debounce state using parking_lot for faster locking
+static LAST_COMMAND_TIME: parking_lot::Mutex<Option<Instant>> = parking_lot::Mutex::new(None);
+
+/// Try to acquire a parking_lot mutex with timeout
+fn try_lock_with_timeout<T>(
+    mutex: &Mutex<T>,
+    timeout: Duration,
+) -> Result<parking_lot::MutexGuard<'_, T>, String> {
+    mutex
+        .try_lock_for(timeout)
+        .ok_or_else(|| "Lock acquisition timed out - operation in progress".to_string())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/features/voice-input/types/generated/")]
@@ -25,9 +46,42 @@ pub async fn start_recording(
 ) -> Result<RecordingResponse, String> {
     log::info!("Start recording command called");
 
+    // Debounce rapid commands
+    {
+        let mut last_time = LAST_COMMAND_TIME.lock();
+        let now = Instant::now();
+        if let Some(last) = *last_time {
+            if now.duration_since(last) < Duration::from_millis(COMMAND_DEBOUNCE_MS) {
+                log::warn!("Command debounced - too rapid");
+                return Ok(RecordingResponse {
+                    success: false,
+                    state: state_manager.get_state(),
+                    error: Some("Please wait before toggling again".to_string()),
+                    file_path: None,
+                });
+            }
+        }
+        *last_time = Some(now);
+    }
+
     // Hide any existing toast window immediately
     if let Err(e) = crate::features::window::toast_window::hide_toast(&app) {
         log::warn!("Failed to hide toast: {}", e);
+    }
+
+    // Check current state - reject if in transition
+    let current_state = state_manager.get_state();
+    if matches!(
+        current_state,
+        RecordingState::Starting | RecordingState::Stopping | RecordingState::Transcribing
+    ) {
+        log::warn!("Cannot start recording - operation in progress: {:?}", current_state);
+        return Ok(RecordingResponse {
+            success: false,
+            state: current_state,
+            error: Some("Operation in progress, please wait".to_string()),
+            file_path: None,
+        });
     }
 
     // Check if already recording
@@ -134,9 +188,8 @@ pub async fn start_recording(
         let _ = play_recording_start_sound();
     }
 
-    let mut recorder_guard = recorder
-        .lock()
-        .map_err(|e| format!("Failed to lock recorder: {}", e))?;
+    // Try to acquire recorder lock with timeout to prevent deadlocks
+    let mut recorder_guard = try_lock_with_timeout(&recorder, LOCK_TIMEOUT)?;
 
     // Set app handle for emitting audio levels
     recorder_guard.set_app_handle(app.clone());
@@ -244,6 +297,39 @@ pub async fn stop_recording(
 ) -> Result<RecordingResponse, String> {
     log::info!("Stop recording command called");
 
+    // Debounce rapid commands
+    {
+        let mut last_time = LAST_COMMAND_TIME.lock();
+        let now = Instant::now();
+        if let Some(last) = *last_time {
+            if now.duration_since(last) < Duration::from_millis(COMMAND_DEBOUNCE_MS) {
+                log::warn!("Stop command debounced - too rapid");
+                return Ok(RecordingResponse {
+                    success: false,
+                    state: state_manager.get_state(),
+                    error: Some("Please wait before toggling again".to_string()),
+                    file_path: None,
+                });
+            }
+        }
+        *last_time = Some(now);
+    }
+
+    // Check current state - if already stopping/transcribing, don't interrupt
+    let current_state = state_manager.get_state();
+    if matches!(
+        current_state,
+        RecordingState::Stopping | RecordingState::Transcribing
+    ) {
+        log::warn!("Already stopping/transcribing: {:?}", current_state);
+        return Ok(RecordingResponse {
+            success: false,
+            state: current_state,
+            error: Some("Already processing, please wait".to_string()),
+            file_path: None,
+        });
+    }
+
     // Check if not recording
     if !state_manager.is_recording() {
         log::warn!("Not currently recording");
@@ -300,10 +386,8 @@ pub async fn stop_recording(
         log::warn!("ShortcutManager not available, cannot unregister Escape");
     }
 
-    // Stop recording
-    let mut recorder_guard = recorder
-        .lock()
-        .map_err(|e| format!("Failed to lock recorder: {}", e))?;
+    // Stop recording - use timeout to prevent deadlocks
+    let mut recorder_guard = try_lock_with_timeout(&recorder, LOCK_TIMEOUT)?;
 
     match recorder_guard.stop_recording() {
         Ok(_) => {
@@ -538,6 +622,24 @@ pub async fn cancel_recording(
 ) -> Result<RecordingResponse, String> {
     log::info!("Cancel recording command called");
 
+    // Debounce rapid commands
+    {
+        let mut last_time = LAST_COMMAND_TIME.lock();
+        let now = Instant::now();
+        if let Some(last) = *last_time {
+            if now.duration_since(last) < Duration::from_millis(COMMAND_DEBOUNCE_MS) {
+                log::warn!("Cancel command debounced - too rapid");
+                return Ok(RecordingResponse {
+                    success: false,
+                    state: state_manager.get_state(),
+                    error: Some("Please wait before toggling again".to_string()),
+                    file_path: None,
+                });
+            }
+        }
+        *last_time = Some(now);
+    }
+
     let current_state = state_manager.get_state();
 
     // Only allow cancel from active states
@@ -554,13 +656,13 @@ pub async fn cancel_recording(
         });
     }
 
-    // Stop the recorder if recording
+    // Stop the recorder if recording - use timeout to prevent deadlocks
     if state_manager.is_recording() {
-        let mut recorder_guard = recorder
-            .lock()
-            .map_err(|e| format!("Failed to lock recorder: {}", e))?;
+        let mut recorder_guard = try_lock_with_timeout(&recorder, LOCK_TIMEOUT)?;
 
-        let _ = recorder_guard.stop_recording();
+        if let Err(e) = recorder_guard.stop_recording() {
+            log::warn!("Error stopping recorder during cancel: {}", e);
+        }
     }
 
     // Clean up the entire recording folder
@@ -667,6 +769,47 @@ pub async fn get_recording_state(
         file_path: state_manager
             .get_current_file()
             .map(|p| p.to_string_lossy().to_string()),
+    })
+}
+
+/// Force reset recording state (emergency recovery)
+/// Use this when the recording gets stuck in a bad state
+#[command]
+pub async fn force_reset_recording(
+    app: AppHandle,
+    state_manager: State<'_, Arc<RecordingStateManager>>,
+) -> Result<RecordingResponse, String> {
+    log::warn!("Force reset recording called - emergency recovery");
+
+    // Force state back to idle
+    state_manager.force_set_state(RecordingState::Idle);
+    state_manager.set_current_file(None);
+    state_manager.set_start_time(None);
+    state_manager.set_recording_device(None);
+    state_manager.set_error(None);
+
+    // Reset debounce timer
+    *LAST_COMMAND_TIME.lock() = None;
+
+    // Hide voice input window if visible
+    if let Some(window) = app.get_webview_window("voice-input") {
+        let _ = window.hide();
+    }
+
+    // Emit state change
+    let _ = app.emit("recording-state-changed", RecordingState::Idle);
+
+    // Disable pill window monitoring
+    #[cfg(target_os = "macos")]
+    crate::features::window::set_pill_monitor_active(false);
+
+    log::info!("Recording state force reset to Idle");
+
+    Ok(RecordingResponse {
+        success: true,
+        state: RecordingState::Idle,
+        error: None,
+        file_path: None,
     })
 }
 

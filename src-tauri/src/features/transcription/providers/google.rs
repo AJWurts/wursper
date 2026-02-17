@@ -1,7 +1,13 @@
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use tauri::command;
 
 use super::TranscriptionResponse;
+
+/// HTTP request timeout for transcription API calls
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+/// HTTP connection timeout
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Serialize, Deserialize)]
 struct GoogleSpeechRequest {
@@ -76,7 +82,12 @@ pub async fn transcribe_with_google(
         },
     };
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
     let response = client
         .post(format!(
             "https://speech.googleapis.com/v1/speech:recognize?key={}",

@@ -1,9 +1,17 @@
+//! Audio recorder with lock-free sample collection.
+//!
+//! Uses a ring buffer for lock-free audio sample collection from the audio callback,
+//! preventing mutex deadlocks that were causing app crashes.
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, Stream, StreamConfig};
 use hound::{WavSpec, WavWriter};
+use parking_lot::Mutex;
+use ringbuf::{traits::*, HeapRb};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::time::Instant;
 use tauri::{AppHandle, Emitter};
 
 /// Audio recorder state
@@ -32,33 +40,46 @@ impl Default for RecorderConfig {
     }
 }
 
-/// Main audio recorder
+/// Ring buffer size - enough for ~5 seconds of 48kHz stereo audio
+const RING_BUFFER_SIZE: usize = 48000 * 2 * 5;
+
+/// Emission throttle interval in milliseconds (~30 FPS)
+const EMIT_INTERVAL_MS: u64 = 33;
+
+/// Main audio recorder using lock-free ring buffer.
+///
+/// The audio callback pushes samples to a ring buffer without acquiring any locks.
+/// A separate consumer thread reads from the buffer and writes to the WAV file.
 pub struct AudioRecorder {
-    state: Arc<Mutex<RecorderState>>,
-    stream: Arc<Mutex<Option<Stream>>>,
-    writer: Arc<Mutex<Option<WavWriter<std::io::BufWriter<std::fs::File>>>>>,
+    state: Mutex<RecorderState>,
+    stream: Mutex<Option<Stream>>,
+    writer: Mutex<Option<WavWriter<std::io::BufWriter<std::fs::File>>>>,
     is_recording: Arc<AtomicBool>,
     config: RecorderConfig,
-    app_handle: Arc<Mutex<Option<AppHandle>>>,
-    last_emit_time: Arc<AtomicU64>,
+    app_handle: Mutex<Option<AppHandle>>,
+    /// Consumer thread handle
+    consumer_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
+    /// Signal to stop the consumer thread
+    stop_consumer: Arc<AtomicBool>,
 }
 
 impl AudioRecorder {
     pub fn new() -> Self {
         Self {
-            state: Arc::new(Mutex::new(RecorderState::Idle)),
-            stream: Arc::new(Mutex::new(None)),
-            writer: Arc::new(Mutex::new(None)),
+            state: Mutex::new(RecorderState::Idle),
+            stream: Mutex::new(None),
+            writer: Mutex::new(None),
             is_recording: Arc::new(AtomicBool::new(false)),
             config: RecorderConfig::default(),
-            app_handle: Arc::new(Mutex::new(None)),
-            last_emit_time: Arc::new(AtomicU64::new(0)),
+            app_handle: Mutex::new(None),
+            consumer_handle: Mutex::new(None),
+            stop_consumer: Arc::new(AtomicBool::new(false)),
         }
     }
 
     /// Set the app handle for emitting events
     pub fn set_app_handle(&mut self, app: AppHandle) {
-        *self.app_handle.lock().unwrap() = Some(app);
+        *self.app_handle.lock() = Some(app);
     }
 
     /// Get the default input device
@@ -111,9 +132,6 @@ impl AudioRecorder {
             .map_err(|e| format!("Failed to get default input config: {}", e))?;
 
         let stream_config: StreamConfig = config.clone().into();
-
-        // IMPORTANT: Use the device's native sample rate instead of hardcoded 16kHz
-        // to avoid sample rate mismatches that cause corrupted audio
         let device_sample_rate = stream_config.sample_rate;
         let device_channels = stream_config.channels;
 
@@ -121,10 +139,6 @@ impl AudioRecorder {
             "Device config - Sample rate: {}, Channels: {}",
             device_sample_rate,
             device_channels
-        );
-        log::info!(
-            "Using device's native sample rate for WAV file: {} Hz",
-            device_sample_rate
         );
 
         // Create WAV writer using device's native sample rate
@@ -138,71 +152,76 @@ impl AudioRecorder {
         let writer = WavWriter::create(output_path.as_ref(), spec)
             .map_err(|e| format!("Failed to create WAV file: {}", e))?;
 
-        // Store writer directly in self.writer so both callback and stop_recording can access it
-        *self.writer.lock().unwrap() = Some(writer);
+        // Store writer
+        *self.writer.lock() = Some(writer);
 
-        // Clone Arc references for the callback
-        let writer_clone = Arc::clone(&self.writer);
+        // Create lock-free ring buffer
+        let ring = HeapRb::<f32>::new(RING_BUFFER_SIZE);
+        let (producer, consumer) = ring.split();
+
+        // Wrap producer in Arc for sharing with callback
+        let producer = Arc::new(parking_lot::Mutex::new(producer));
+        let producer_clone = Arc::clone(&producer);
+
+        // Clone state for callback
         let is_recording = Arc::clone(&self.is_recording);
-        let app_handle_clone = Arc::clone(&self.app_handle);
-        let last_emit_time_clone = Arc::clone(&self.last_emit_time);
+        let app_handle_clone = self.app_handle.lock().clone();
+        let last_emit_time = Arc::new(AtomicU64::new(0));
+        let last_emit_time_clone = Arc::clone(&last_emit_time);
 
-        // Sample counter for debugging
-        let sample_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let counter_clone = Arc::clone(&sample_counter);
-
+        // Build the audio input stream
         let stream = device
             .build_input_stream(
                 &stream_config,
                 move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                    if !is_recording.load(Ordering::Acquire) {
+                    // Early exit if not recording - lock-free check
+                    if !is_recording.load(Ordering::Relaxed) {
                         return;
                     }
 
-                    // Calculate RMS level for visualization
+                    // Calculate RMS level for visualization (before pushing to buffer)
                     let mut sum_squares = 0.0f32;
-                    let mut wrote_samples = 0;
-
-                    let mut writer_guard = writer_clone.lock().unwrap();
-                    if let Some(ref mut writer) = *writer_guard {
-                        for &sample in data.iter() {
-                            sum_squares += sample * sample;
-                            let sample_i16 = (sample * i16::MAX as f32) as i16;
-                            if writer.write_sample(sample_i16).is_ok() {
-                                wrote_samples += 1;
-                            }
-                        }
-                        let total = counter_clone.fetch_add(wrote_samples, Ordering::Relaxed)
-                            + wrote_samples;
-                        // Log every ~1 second worth of samples
-                        if total % (device_sample_rate as usize) < wrote_samples {
-                            log::debug!("Wrote {} total samples so far", total);
-                        }
-                    } else {
-                        log::error!("Writer is None in audio callback - this should not happen!");
-                        return;
+                    for &sample in data.iter() {
+                        sum_squares += sample * sample;
                     }
-                    drop(writer_guard); // Release lock early
 
-                    // Calculate RMS and emit at ~30Hz (every 33ms)
-                    let rms = (sum_squares / data.len() as f32).sqrt();
-                    let level = (rms * 100.0).min(100.0); // Convert to 0-100 scale
-
-                    // Throttle emissions to ~30 per second
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_millis() as u64;
-                    let last_emit = last_emit_time_clone.load(Ordering::Relaxed);
-
-                    if now - last_emit >= 33 {
-                        // ~30 FPS
-                        last_emit_time_clone.store(now, Ordering::Relaxed);
-
-                        if let Ok(app_guard) = app_handle_clone.lock() {
-                            if let Some(app) = app_guard.as_ref() {
-                                let _ = app.emit("audio-level", level);
+                    // Push samples to ring buffer - lock-free operation
+                    // Try to acquire lock briefly, drop samples if can't
+                    if let Some(mut prod) = producer_clone.try_lock() {
+                        // Push as many samples as possible
+                        let pushed = prod.push_slice(data);
+                        if pushed < data.len() {
+                            // Buffer full - log occasionally to avoid spam
+                            static OVERFLOW_COUNT: AtomicU64 = AtomicU64::new(0);
+                            let count = OVERFLOW_COUNT.fetch_add(1, Ordering::Relaxed);
+                            if count % 100 == 0 {
+                                log::warn!(
+                                    "Ring buffer overflow: dropped {} samples (total overflows: {})",
+                                    data.len() - pushed,
+                                    count + 1
+                                );
                             }
+                        }
+                    }
+
+                    // Throttle audio level emissions to ~30 FPS
+                    // Use Instant-based timing (monotonic, no syscalls for time)
+                    let now_ms = {
+                        static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+                        let start = START.get_or_init(Instant::now);
+                        start.elapsed().as_millis() as u64
+                    };
+
+                    let last_emit = last_emit_time_clone.load(Ordering::Relaxed);
+                    if now_ms.saturating_sub(last_emit) >= EMIT_INTERVAL_MS {
+                        last_emit_time_clone.store(now_ms, Ordering::Relaxed);
+
+                        let rms = (sum_squares / data.len() as f32).sqrt();
+                        let level = (rms * 100.0).min(100.0);
+
+                        if let Some(ref app) = app_handle_clone {
+                            // Emit is non-blocking, safe in callback
+                            let _ = app.emit("audio-level", level);
                         }
                     }
                 },
@@ -213,10 +232,10 @@ impl AudioRecorder {
             )
             .map_err(|e| format!("Failed to build input stream: {}", e))?;
 
-        // IMPORTANT: Set is_recording BEFORE starting the stream to avoid race condition
-        // where the callback fires before the flag is set
+        // Set recording flag BEFORE starting stream
         self.is_recording.store(true, Ordering::Release);
-        *self.state.lock().unwrap() = RecorderState::Recording;
+        *self.state.lock() = RecorderState::Recording;
+        self.stop_consumer.store(false, Ordering::Release);
 
         // Start the stream
         stream
@@ -224,7 +243,63 @@ impl AudioRecorder {
             .map_err(|e| format!("Failed to start stream: {}", e))?;
 
         // Store stream
-        *self.stream.lock().unwrap() = Some(stream);
+        *self.stream.lock() = Some(stream);
+
+        // Start consumer thread to write samples from ring buffer to file
+        let writer_clone = Arc::new(parking_lot::Mutex::new(self.writer.lock().take()));
+        let stop_signal = Arc::clone(&self.stop_consumer);
+        let is_recording_clone = Arc::clone(&self.is_recording);
+
+        let consumer = Arc::new(parking_lot::Mutex::new(consumer));
+        let consumer_handle = std::thread::Builder::new()
+            .name("audio-writer".to_string())
+            .spawn(move || {
+                let mut buffer = vec![0.0f32; 4096]; // Read buffer
+
+                while !stop_signal.load(Ordering::Relaxed) {
+                    // Read from ring buffer
+                    let count = if let Some(mut cons) = consumer.try_lock() {
+                        cons.pop_slice(&mut buffer)
+                    } else {
+                        0
+                    };
+
+                    if count > 0 {
+                        // Write to WAV file
+                        if let Some(mut writer_guard) = writer_clone.try_lock() {
+                            if let Some(ref mut writer) = *writer_guard {
+                                for &sample in &buffer[..count] {
+                                    let sample_i16 = (sample * i16::MAX as f32) as i16;
+                                    if let Err(e) = writer.write_sample(sample_i16) {
+                                        log::error!("Failed to write sample: {}", e);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } else if !is_recording_clone.load(Ordering::Relaxed) {
+                        // No more data and recording stopped - exit
+                        break;
+                    } else {
+                        // No data available, sleep briefly
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                    }
+                }
+
+                // Finalize WAV file
+                if let Some(mut writer_guard) = writer_clone.try_lock() {
+                    if let Some(writer) = writer_guard.take() {
+                        if let Err(e) = writer.finalize() {
+                            log::error!("Failed to finalize WAV file: {}", e);
+                        } else {
+                            log::info!("WAV file finalized successfully");
+                        }
+                    }
+                }
+            })
+            .map_err(|e| format!("Failed to spawn consumer thread: {}", e))?;
+
+        *self.consumer_handle.lock() = Some(consumer_handle);
 
         log::info!("Recording started");
         Ok(())
@@ -238,23 +313,36 @@ impl AudioRecorder {
 
         // Signal to stop recording
         self.is_recording.store(false, Ordering::Release);
+        self.stop_consumer.store(true, Ordering::Release);
 
         // Drop the stream to stop it
-        if let Ok(mut stream_guard) = self.stream.lock() {
-            *stream_guard = None;
-        }
+        *self.stream.lock() = None;
 
-        // Finalize the WAV file
-        if let Ok(mut writer_guard) = self.writer.lock() {
-            if let Some(writer) = writer_guard.take() {
-                writer
-                    .finalize()
-                    .map_err(|e| format!("Failed to finalize WAV file: {}", e))?;
+        // Wait for consumer thread to finish
+        if let Some(handle) = self.consumer_handle.lock().take() {
+            // Give the consumer thread time to flush remaining samples
+            let timeout = std::time::Duration::from_secs(2);
+            let start = Instant::now();
+
+            loop {
+                if handle.is_finished() {
+                    if let Err(e) = handle.join() {
+                        log::error!("Consumer thread panicked: {:?}", e);
+                    }
+                    break;
+                }
+
+                if start.elapsed() > timeout {
+                    log::warn!("Consumer thread join timed out, continuing...");
+                    break;
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(10));
             }
         }
 
         // Update state
-        *self.state.lock().unwrap() = RecorderState::Idle;
+        *self.state.lock() = RecorderState::Idle;
 
         log::info!("Recording stopped");
         Ok(())
@@ -267,7 +355,7 @@ impl AudioRecorder {
 
     /// Get current recorder state
     pub fn get_state(&self) -> RecorderState {
-        *self.state.lock().unwrap()
+        *self.state.lock()
     }
 
     pub fn list_devices() -> Result<Vec<String>, String> {
@@ -289,10 +377,18 @@ impl AudioRecorder {
     }
 }
 
+impl Default for AudioRecorder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Drop for AudioRecorder {
     fn drop(&mut self) {
         // Ensure recording is stopped and resources are cleaned up
-        let _ = self.stop_recording();
+        if self.is_recording.load(Ordering::Acquire) {
+            let _ = self.stop_recording();
+        }
     }
 }
 
@@ -337,6 +433,23 @@ mod tests {
 
             // Verify file was created
             assert!(file_path.exists());
+        }
+    }
+
+    #[test]
+    fn test_double_start_fails() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.wav");
+
+        let mut recorder = AudioRecorder::new();
+
+        if recorder.start_recording(&file_path, None).is_ok() {
+            // Second start should fail
+            let result = recorder.start_recording(&file_path, None);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("Already recording"));
+
+            let _ = recorder.stop_recording();
         }
     }
 }

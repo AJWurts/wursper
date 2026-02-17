@@ -1,4 +1,5 @@
 use crate::utils::logger;
+use std::time::Duration;
 use tauri::command;
 
 #[cfg(target_os = "macos")]
@@ -11,6 +12,11 @@ use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 
 use ts_rs::TS;
+
+/// Timeout for paste operations - if target app is unresponsive
+const PASTE_TIMEOUT: Duration = Duration::from_secs(5);
+/// Timeout for getting focused app info
+const GET_APP_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(
@@ -28,7 +34,7 @@ pub struct FocusedApp {
 pub async fn get_focused_app() -> Result<FocusedApp, String> {
     #[cfg(target_os = "macos")]
     {
-        // Use AppleScript to get frontmost application info
+        // Use AppleScript to get frontmost application info with timeout
         let script = r#"
             tell application "System Events"
                 set frontApp to first application process whose frontmost is true
@@ -38,12 +44,16 @@ pub async fn get_focused_app() -> Result<FocusedApp, String> {
             end tell
         "#;
 
-        let output = Command::new("osascript")
-            .arg("-e")
-            .arg(script)
-            .output()
-            .await
-            .map_err(|e| format!("Failed to get focused app: {}", e))?;
+        let output = tokio::time::timeout(GET_APP_TIMEOUT, async {
+            Command::new("osascript")
+                .arg("-e")
+                .arg(script)
+                .output()
+                .await
+                .map_err(|e| format!("Failed to get focused app: {}", e))
+        })
+        .await
+        .map_err(|_| "Timed out getting focused app - System Events may be unresponsive".to_string())??;
 
         let result = String::from_utf8_lossy(&output.stdout);
         let parts: Vec<&str> = result.trim().split('|').collect();
@@ -131,12 +141,17 @@ pub async fn copy_and_paste(text: String) -> Result<(), String> {
             focused_app.name
         ));
 
-        let output = Command::new("osascript")
-            .arg("-e")
-            .arg(&combined_script)
-            .output()
-            .await
-            .map_err(|e| format!("Failed to execute paste command: {}", e))?;
+        // Execute paste with timeout to prevent hanging on unresponsive apps
+        let output = tokio::time::timeout(PASTE_TIMEOUT, async {
+            Command::new("osascript")
+                .arg("-e")
+                .arg(&combined_script)
+                .output()
+                .await
+                .map_err(|e| format!("Failed to execute paste command: {}", e))
+        })
+        .await
+        .map_err(|_| format!("Paste timed out - {} may be unresponsive", focused_app.name))??;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

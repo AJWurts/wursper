@@ -1,8 +1,14 @@
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use tauri::command;
 
 use super::TranscriptionResponse;
+
+/// HTTP request timeout for transcription API calls
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+/// HTTP connection timeout
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ElevenLabsError {
@@ -22,6 +28,20 @@ struct ElevenLabsResponse {
     language: Option<String>,
 }
 
+/// Get MIME type from filename extension
+fn get_mime_type(filename: &str) -> &'static str {
+    let ext = filename.rsplit('.').next().unwrap_or("wav").to_lowercase();
+    match ext.as_str() {
+        "mp3" => "audio/mpeg",
+        "mp4" | "m4a" => "audio/mp4",
+        "mpeg" | "mpga" => "audio/mpeg",
+        "ogg" => "audio/ogg",
+        "webm" => "audio/webm",
+        "flac" => "audio/flac",
+        _ => "audio/wav",
+    }
+}
+
 /// Transcribe audio using ElevenLabs Speech-to-Text API
 ///
 /// API Reference: https://elevenlabs.io/docs/api-reference/speech-to-text
@@ -30,28 +50,30 @@ pub async fn transcribe_with_elevenlabs(
     audio_data: Vec<u8>,
     api_key: String,
     model: Option<String>,
-    language: Option<String>,
+    filename: Option<String>,
 ) -> Result<TranscriptionResponse, String> {
     // ElevenLabs uses "scribe_v1" model for speech-to-text
     let model_id = model.unwrap_or_else(|| "scribe_v1".to_string());
+    let filename = filename.unwrap_or_else(|| "audio.wav".to_string());
+    let mime_type = get_mime_type(&filename);
 
     // Create multipart form - field must be named "file" per API docs
     let audio_part = Part::bytes(audio_data)
-        .file_name("audio.wav")
-        .mime_str("audio/wav")
+        .file_name(filename)
+        .mime_str(mime_type)
         .map_err(|e| format!("Failed to create audio part: {}", e))?;
 
-    let mut form = Form::new()
+    let form = Form::new()
         .part("file", audio_part)
         .text("model_id", model_id);
 
-    // Add language if provided
-    if let Some(lang) = language {
-        form = form.text("language", lang);
-    }
+    // Make request to ElevenLabs API with timeouts to prevent hangs
+    let client = reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    // Make request to ElevenLabs API
-    let client = reqwest::Client::new();
     let response = client
         .post("https://api.elevenlabs.io/v1/speech-to-text")
         .header("xi-api-key", api_key)

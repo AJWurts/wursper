@@ -2,10 +2,11 @@ use crate::features::audio::{
     cancel_recording, start_recording, stop_recording, AudioRecorder, RecordingState,
     RecordingStateManager,
 };
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
-use tauri_plugin_global_shortcut::{Shortcut, ShortcutEvent, ShortcutState};
+use tauri_plugin_global_shortcut::{ShortcutEvent, ShortcutState};
 
 /// Handles recording shortcuts for both Toggle and PTT modes
 pub struct RecordingShortcutHandler {
@@ -23,7 +24,7 @@ impl RecordingShortcutHandler {
 
     /// Check if the shortcut should be throttled
     fn should_throttle(&self) -> bool {
-        let mut last_press = self.last_press_time.lock().unwrap();
+        let mut last_press = self.last_press_time.lock();
         let now = Instant::now();
 
         if let Some(last) = *last_press {

@@ -1,5 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import {
   useTranscriptionsStore,
   initializeTranscriptions,
@@ -10,10 +12,12 @@ import { groupTranscriptionsByDate } from '../utils'
 import { EmptyState } from './empty-state'
 import { StatsHeader } from './stats-header'
 import { TranscriptionGroup } from './transcription-group'
+import { UploadDialog } from './upload-dialog'
 
 export function HomePageContent() {
   const { transcriptions, initialized, getStats, deleteTranscription } =
     useTranscriptionsStore()
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
 
   const stats = getStats()
 
@@ -37,8 +41,30 @@ export function HomePageContent() {
   }
 
   return (
-    <div className="h-full w-full flex flex-col">
-      <div className="shrink-0 px-8 pt-16 pb-2">
+    <div className="h-full w-full flex flex-col px-8">
+      {/* Page Header */}
+      <div className="shrink-0 pt-16 pb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-medium tracking-tight text-foreground">
+              Transcriptions
+            </h1>
+            <span className="text-xs font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded tabular-nums">
+              {transcriptions.length}
+            </span>
+          </div>
+          <Button size="sm" onClick={() => setUploadDialogOpen(true)}>
+            <Plus className="w-3.5 h-3.5 mr-1.5" />
+            Upload Audio
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground mt-1.5">
+          Your voice recordings and uploaded audio transcriptions.
+        </p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="shrink-0 pb-4">
         <StatsHeader
           todayCount={stats.todayCount}
           totalTranscriptions={stats.totalTranscriptions}
@@ -49,13 +75,8 @@ export function HomePageContent() {
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
-        <div className="sticky top-0 z-20 -mx-8 px-8 bg-background pb-3 pt-2 shadow-[0_8px_12px_-4px_hsl(var(--background))]">
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
-            Recent Transcriptions
-          </h2>
-        </div>
-
+      {/* Transcription List */}
+      <div className="flex-1 overflow-y-auto pb-8">
         {transcriptions.length === 0 ? (
           <EmptyState />
         ) : (
@@ -68,6 +89,11 @@ export function HomePageContent() {
           ))
         )}
       </div>
+
+      <UploadDialog
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+      />
     </div>
   )
 }

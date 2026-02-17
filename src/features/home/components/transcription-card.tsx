@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react'
+import { Trash2, Upload } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
@@ -24,6 +24,7 @@ export function TranscriptionCard({
   const timestamp = parseInt(transcription.id.split('-')[0])
   // Only fetch audio path if the transcription has audio saved
   const { audioPath } = useAudioPath(transcription.hasAudio ? timestamp : null)
+  const isUploaded = transcription.sourceType === 'upload'
 
   return (
     <div
@@ -37,6 +38,19 @@ export function TranscriptionCard({
       <div className="px-4 py-3.5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              {isUploaded && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500 rounded">
+                  <Upload className="h-2.5 w-2.5" />
+                  Uploaded
+                </span>
+              )}
+              {isUploaded && transcription.originalFilename && (
+                <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">
+                  {transcription.originalFilename}
+                </span>
+              )}
+            </div>
             <p className="text-[13px] leading-relaxed text-foreground line-clamp-2 mb-1.5">
               {transcription.text}
             </p>

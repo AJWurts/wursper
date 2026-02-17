@@ -19,8 +19,8 @@ use super::providers::{elevenlabs, google, local_whisper, openai};
 use crate::features::recordings::metadata::RecordingMetadata;
 use crate::features::recordings::storage::{get_all_recordings, read_metadata, save_metadata};
 
-// Global state for debouncing paste operations
-static LAST_PASTE_TIME: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+// Global state for debouncing paste operations (using parking_lot for faster locking)
+static LAST_PASTE_TIME: parking_lot::Mutex<Option<Instant>> = parking_lot::Mutex::new(None);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -435,10 +435,7 @@ pub async fn paste_last_transcript(app: AppHandle) -> Result<(), String> {
     const DEBOUNCE_DURATION: Duration = Duration::from_millis(500);
 
     {
-        let mut last_time = LAST_PASTE_TIME
-            .lock()
-            .map_err(|e| format!("Failed to lock paste time: {}", e))?;
-
+        let mut last_time = LAST_PASTE_TIME.lock();
         let now = Instant::now();
 
         if let Some(last) = *last_time {
@@ -483,7 +480,7 @@ async fn transcribe_with_provider(
                 api_key,
                 Some(model.id.clone()),
                 language.clone(), // Use selected language
-                None,             // temperature
+                None,             // filename (defaults to audio.wav for recordings)
             )
             .await?
         }
@@ -520,7 +517,7 @@ async fn transcribe_with_provider(
                 audio_data,
                 api_key,
                 Some(model.id.clone()),
-                None, // language
+                None, // filename (defaults to audio.wav for recordings)
             )
             .await?
         }
