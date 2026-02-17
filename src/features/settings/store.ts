@@ -3,7 +3,8 @@ import { Store, load } from '@tauri-apps/plugin-store'
 import { create } from 'zustand'
 
 import { initAnalytics, setAnalyticsEnabled, analytics } from '@/lib/analytics'
-import { defaultSettings, type Settings } from './schema'
+
+import { AiProcessingSettings, defaultSettings, type Settings } from './schema'
 
 import type { SettingsStore } from './types'
 
@@ -369,7 +370,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     try {
       const store = await getTauriStore()
       const currentSettings = get().settings
-      console.log('   Current settings before update:', currentSettings.aiProcessing)
+      console.log(
+        '   Current settings before update:',
+        currentSettings.aiProcessing
+      )
 
       const newSettings = {
         ...currentSettings,
@@ -386,7 +390,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
       // Verify by reading back from store
       const verifyStore = await store.get('settings')
-      console.log('   ✅ Verified store contents:', (verifyStore as any)?.aiProcessing)
+      console.log(
+        '   ✅ Verified store contents:',
+        (verifyStore as unknown as { aiProcessing: AiProcessingSettings })
+          ?.aiProcessing
+      )
     } catch (error) {
       console.error('❌ Error setting post-processing model:', error)
     }
