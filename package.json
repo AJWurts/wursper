@@ -17,7 +17,13 @@
     "format:rust:check": "cd src-tauri && cargo fmt --all -- --check",
     "format:all": "pnpm format && pnpm format:rust",
     "generate:types": "cd src-tauri && cargo test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "release": "./scripts/release.sh",
+    "release:patch": "./scripts/release.sh patch",
+    "release:minor": "./scripts/release.sh minor",
+    "release:major": "./scripts/release.sh major",
+    "release:dry": "./scripts/release.sh patch --dry-run",
+    "version:bump": "./scripts/bump-version.sh"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [

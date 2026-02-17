@@ -31,3 +31,6 @@ vendor
 .env
 .env.local
 .env.*.local
+
+# Release
+release-*

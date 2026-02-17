@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { toast } from 'sonner'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-shell'
 import { Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { appConfig } from '@/config'
