@@ -1859,7 +1859,7 @@ dependencies = [
 
 [[package]]
 name = "dicta"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",

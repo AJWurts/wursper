@@ -1,3 +1,14 @@
+## [0.0.4](https://github.com/nitintf/dicta/compare/v0.0.3...v0.0.4) (2026-02-17)
+
+
+### Features
+
+* add TODOs for future improvements and bug fixes ([37a2ef2](https://github.com/nitintf/dicta/commit/37a2ef29f6f43572d5babfe2e3324cc8b41e072a))
+* improve accessibility step with enhanced permission handling and UI updates ([3931695](https://github.com/nitintf/dicta/commit/3931695501cb967e1770280d8832dab894350b0c))
+* integrate PostHog analytics and enhance model capabilities ([2ce2394](https://github.com/nitintf/dicta/commit/2ce23944f68661058fe39f7f6eb2bc753f2a57d6))
+
+
+
 ## [0.0.3](https://github.com/nitintf/dicta/compare/v0.0.2...v0.0.3) (2026-01-10)
 
 
