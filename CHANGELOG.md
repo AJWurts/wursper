@@ -1,3 +1,12 @@
+## [0.0.5](https://github.com/nitintf/dicta/compare/v0.0.4...v0.0.5) (2026-02-17)
+
+
+### Bug Fixes
+
+* accessibility step not able to allow the permission ([2952d8d](https://github.com/nitintf/dicta/commit/2952d8d3b3b58bf1b12dc10ee936aedfc43634da))
+
+
+
 ## [0.0.4](https://github.com/nitintf/dicta/compare/v0.0.3...v0.0.4) (2026-02-17)
 
 
