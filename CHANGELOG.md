@@ -1,3 +1,20 @@
+## [0.0.7](https://github.com/nitintf/dicta/compare/v0.0.6...v0.0.7) (2026-02-18)
+
+
+### Bug Fixes
+
+* eslint issues ([e47fcab](https://github.com/nitintf/dicta/commit/e47fcab6c4e41ead0568ceca17c338adf303ab43))
+* eslint issues ([fbca997](https://github.com/nitintf/dicta/commit/fbca9978902e739fc80d7e62b7aeb33fb355595e))
+* formatting issues ([68f4590](https://github.com/nitintf/dicta/commit/68f459040d4a3e561e40829675ce3169601b5d2c))
+* rust files formatting ([5b1a217](https://github.com/nitintf/dicta/commit/5b1a21772d78d30b1c4daac2cee8e81c24a88131))
+
+
+### Features
+
+* add search and filter functionality for transcriptions ([8d89705](https://github.com/nitintf/dicta/commit/8d89705a46f67ed60822d07659aee1aabdfceae8))
+
+
+
 ## [0.0.6](https://github.com/nitintf/dicta/compare/v0.0.5...v0.0.6) (2026-02-18)
 
 
