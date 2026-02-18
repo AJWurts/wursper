@@ -34,3 +34,8 @@ vendor
 
 # Release
 release-*
+
+# Feature Plans
+feature-plans
+docs
+src-tauri/ROADMAP.md
