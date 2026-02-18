@@ -18,46 +18,6 @@ pub struct ToastMessage {
     pub toast_type: ToastType,
 }
 
-/// Orders the toast window to front (makes it visible)
-#[cfg(target_os = "macos")]
-fn order_front_toast(app: &AppHandle) {
-    use tauri_nspanel::ManagerExt;
-
-    if let Ok(panel) = app.get_webview_panel("toast") {
-        panel.order_front_regardless();
-        log::debug!("Toast panel ordered front");
-    } else {
-        log::warn!("Toast panel not found for order_front");
-    }
-}
-
-/// Orders the toast window out (removes from screen without destroying)
-#[cfg(target_os = "macos")]
-fn order_out_toast(app: &AppHandle) {
-    use tauri_nspanel::ManagerExt;
-
-    if let Ok(panel) = app.get_webview_panel("toast") {
-        panel.order_out(None);
-        log::debug!("Toast panel ordered out");
-    } else {
-        log::warn!("Toast panel not found for order_out");
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn order_front_toast(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("toast") {
-        let _ = window.show();
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn order_out_toast(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("toast") {
-        let _ = window.hide();
-    }
-}
-
 /// Shows a toast notification with optional probability
 /// probability: 0.0 to 1.0 (1.0 = always show, 0.3 = 30% chance)
 pub fn show_toast(
@@ -85,8 +45,10 @@ pub fn show_toast(
         log::warn!("Failed to position toast window: {}", e);
     }
 
-    // Show the toast window using orderFront
-    order_front_toast(app);
+    // Show the toast window
+    if let Some(window) = app.get_webview_window("toast") {
+        let _ = window.show();
+    }
 
     // Emit the toast message
     let payload = ToastMessage {
@@ -101,10 +63,11 @@ pub fn show_toast(
     Ok(())
 }
 
-/// Hides the toast window using orderOut (properly removes from screen)
+/// Hides the toast window
 pub fn hide_toast(app: &AppHandle) -> Result<(), String> {
-    // Use orderOut to properly remove the window from the screen
-    order_out_toast(app);
+    if let Some(window) = app.get_webview_window("toast") {
+        let _ = window.hide();
+    }
 
     app.emit("hide_toast", ())
         .map_err(|e| format!("Failed to emit hide_toast: {}", e))?;
@@ -151,6 +114,7 @@ fn position_toast_window(app: &AppHandle) -> tauri::Result<()> {
 
         let toast_width = 360.0;
         let toast_height = 72.0;
+        let pill_width = 240.0;
         let pill_height = 40.0;
         let bottom_offset = 16.0;
         let gap = 12.0; // Gap between pill and toast
@@ -159,6 +123,8 @@ fn position_toast_window(app: &AppHandle) -> tauri::Result<()> {
         let x = visible_frame.origin.x + (visible_frame.size.width - toast_width) / 2.0;
 
         // Position above the pill window
+        // Pill is at: visible_frame.origin.y + bottom_offset (bottom of pill in macOS coords)
+        // Toast should be above pill: pill_bottom + pill_height + gap
         let pill_top_macos_y = visible_frame.origin.y + bottom_offset + pill_height;
         let toast_bottom_macos_y = pill_top_macos_y + gap;
         let toast_top_macos_y = toast_bottom_macos_y + toast_height;
@@ -193,6 +159,7 @@ pub fn setup_toast_window(app: &AppHandle) -> tauri::Result<()> {
 
         let toast_width = 360.0;
         let toast_height = 72.0;
+        let pill_width = 240.0;
         let pill_height = 40.0;
         let bottom_offset = 16.0;
         let gap = 12.0;
@@ -243,14 +210,28 @@ pub fn setup_toast_window(app: &AppHandle) -> tauri::Result<()> {
     let toast_window = toast_builder.build()?;
     log::info!("Toast window built successfully");
 
-    // Convert to NSPanel and configure
+    // Set ignoresMouseEvents BEFORE converting to panel
+    // This ensures the toast never blocks mouse clicks (even when hidden)
+    // The toast is display-only and doesn't need mouse interaction
     use tauri_nspanel::WebviewWindowExt;
+    if let Ok(ns_window) = toast_window.ns_window() {
+        unsafe {
+            use objc2::msg_send;
+            use objc2::runtime::Bool;
+            let ns_window: *mut objc2::runtime::AnyObject = ns_window.cast();
+            let _: () = msg_send![ns_window, setIgnoresMouseEvents: Bool::from(true)];
+            log::info!("Toast window set to ignore mouse events");
+        }
+    }
+
+    // Convert to NSPanel and configure
 
     match toast_window.to_panel() {
         Ok(panel) => {
             log::info!("Toast window converted to NSPanel");
 
             // Set window level HIGHER than pill window (pill is 1000)
+            // Toast should appear above the pill
             panel.set_level(1001);
 
             // Set collection behavior for full-screen support
@@ -266,10 +247,7 @@ pub fn setup_toast_window(app: &AppHandle) -> tauri::Result<()> {
             panel.set_floating_panel(true);
             panel.set_hides_on_deactivate(false);
 
-            // Order out initially so it doesn't block clicks
-            panel.order_out(None);
-
-            log::info!("Toast panel configured and ordered out");
+            log::info!("Toast panel configured for full-screen and multi-monitor support");
         }
         Err(e) => log::error!("Failed to convert toast to NSPanel: {:?}", e),
     }
