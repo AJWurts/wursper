@@ -187,7 +187,10 @@ pub async fn copy_and_paste(text: String) -> Result<(), String> {
             let stderr = String::from_utf8_lossy(&output.stderr);
             logger::error(&format!("Paste failed: {}", stderr));
 
-            if stderr.contains("not allowed") || stderr.contains("assistive") || stderr.contains("1002") {
+            if stderr.contains("not allowed")
+                || stderr.contains("assistive")
+                || stderr.contains("1002")
+            {
                 return Err("Accessibility permission not granted. Enable Dicta in System Settings → Privacy & Security → Accessibility".to_string());
             }
             return Err(format!("Paste failed: {}", stderr));

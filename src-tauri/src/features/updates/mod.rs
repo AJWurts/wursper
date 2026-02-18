@@ -59,7 +59,11 @@ pub async fn check_for_updates(app: AppHandle, silent: bool) -> Result<Option<Up
 
     match updater.check().await {
         Ok(Some(update)) => {
-            log::info!("Update available: {} -> {}", update.current_version, update.version);
+            log::info!(
+                "Update available: {} -> {}",
+                update.current_version,
+                update.version
+            );
             let update_info = UpdateInfo {
                 version: update.version.clone(),
                 current_version: update.current_version.clone(),
@@ -68,7 +72,9 @@ pub async fn check_for_updates(app: AppHandle, silent: bool) -> Result<Option<Up
 
             let _ = app.emit(
                 "update-status",
-                UpdateStatus::Available { update: update_info.clone() },
+                UpdateStatus::Available {
+                    update: update_info.clone(),
+                },
             );
 
             Ok(Some(update_info))
@@ -84,14 +90,22 @@ pub async fn check_for_updates(app: AppHandle, silent: bool) -> Result<Option<Up
             let error_msg = e.to_string();
             log::warn!("Update check failed: {}", error_msg);
 
-            if error_msg.contains("decoding") || error_msg.contains("404") || error_msg.contains("Not Found") {
+            if error_msg.contains("decoding")
+                || error_msg.contains("404")
+                || error_msg.contains("Not Found")
+            {
                 if !silent {
                     let _ = app.emit("update-status", UpdateStatus::NotAvailable);
                 }
                 Ok(None)
             } else {
                 if !silent {
-                    let _ = app.emit("update-status", UpdateStatus::Error { message: error_msg.clone() });
+                    let _ = app.emit(
+                        "update-status",
+                        UpdateStatus::Error {
+                            message: error_msg.clone(),
+                        },
+                    );
                 }
                 Err(format!("Failed to check for updates: {}", error_msg))
             }

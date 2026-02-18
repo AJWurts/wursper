@@ -399,13 +399,8 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             "turbo" => format!("Whisper Large V3 Turbo"),
             "distilled" => {
                 let base_name = name.replace("distil-", "").replace(".en", "");
-                let capitalized = base_name
-                    .chars()
-                    .next()
-                    .unwrap()
-                    .to_uppercase()
-                    .to_string()
-                    + &base_name[1..];
+                let capitalized =
+                    base_name.chars().next().unwrap().to_uppercase().to_string() + &base_name[1..];
                 format!("Distil Whisper {}", capitalized)
             }
             _ => format!(
