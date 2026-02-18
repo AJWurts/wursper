@@ -1,4 +1,5 @@
 import { Trash2, Upload } from 'lucide-react'
+import { useMemo } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
@@ -6,7 +7,7 @@ import { PlayButton } from '@/components/ui/play-button'
 import { useAudioPath } from '@/features/transcriptions'
 import { cn } from '@/lib/cn'
 
-import { formatTime, formatDuration } from '../utils'
+import { formatTime, formatDuration, highlightSearchMatches } from '../utils'
 
 import type { Transcription } from '@/features/transcriptions'
 
@@ -14,17 +15,25 @@ interface TranscriptionCardProps {
   transcription: Transcription
   onDelete: (id: string) => void
   isLast: boolean
+  searchQuery?: string
 }
 
 export function TranscriptionCard({
   transcription,
   onDelete,
   isLast,
+  searchQuery,
 }: TranscriptionCardProps) {
   const timestamp = parseInt(transcription.id.split('-')[0])
   // Only fetch audio path if the transcription has audio saved
   const { audioPath } = useAudioPath(transcription.hasAudio ? timestamp : null)
   const isUploaded = transcription.sourceType === 'upload'
+
+  // Highlight search matches
+  const highlightedText = useMemo(() => {
+    if (!searchQuery) return null
+    return highlightSearchMatches(transcription.text, searchQuery)
+  }, [transcription.text, searchQuery])
 
   return (
     <div
@@ -52,7 +61,22 @@ export function TranscriptionCard({
               )}
             </div>
             <p className="text-[13px] leading-relaxed text-foreground line-clamp-2 mb-1.5">
-              {transcription.text}
+              {highlightedText ? (
+                highlightedText.map((segment, i) =>
+                  segment.isHighlight ? (
+                    <mark
+                      key={i}
+                      className="bg-yellow-200/80 dark:bg-yellow-500/30 text-foreground rounded-sm px-0.5"
+                    >
+                      {segment.text}
+                    </mark>
+                  ) : (
+                    <span key={i}>{segment.text}</span>
+                  )
+                )
+              ) : (
+                transcription.text
+              )}
             </p>
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
               <span>{formatTime(transcription.timestamp)}</span>

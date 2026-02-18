@@ -5,11 +5,13 @@ import type { GroupedTranscriptions } from '../utils'
 interface TranscriptionGroupProps {
   group: GroupedTranscriptions
   onDeleteTranscription: (id: string) => void
+  searchQuery?: string
 }
 
 export function TranscriptionGroup({
   group,
   onDeleteTranscription,
+  searchQuery,
 }: TranscriptionGroupProps) {
   return (
     <div className="mb-6">
@@ -26,6 +28,7 @@ export function TranscriptionGroup({
             transcription={transcription}
             onDelete={onDeleteTranscription}
             isLast={index === group.transcriptions.length - 1}
+            searchQuery={searchQuery}
           />
         ))}
       </div>

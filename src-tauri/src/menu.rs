@@ -424,7 +424,7 @@ fn handle_tray_event(
             logger::info("Check for updates clicked");
             let app_clone = app.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = crate::features::updates::check_for_updates(app_clone).await {
+                if let Err(e) = crate::features::updates::check_for_updates(app_clone, false).await {
                     logger::error(&format!("Failed to check for updates: {}", e));
                 }
             });

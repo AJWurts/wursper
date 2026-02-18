@@ -42,13 +42,15 @@ pub enum UpdateStatus {
     Error { message: String },
 }
 
-/// Check for available updates and emit events
+/// Check for available updates
+/// silent: if true, only emit events when update is available (for background checks)
 #[command]
-pub async fn check_for_updates(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
-    log::info!("Checking for updates...");
+pub async fn check_for_updates(app: AppHandle, silent: bool) -> Result<Option<UpdateInfo>, String> {
+    log::info!("Checking for updates (silent: {})...", silent);
 
-    // Emit checking status
-    let _ = app.emit("update-status", UpdateStatus::Checking);
+    if !silent {
+        let _ = app.emit("update-status", UpdateStatus::Checking);
+    }
 
     let updater = app
         .updater_builder()
@@ -57,52 +59,40 @@ pub async fn check_for_updates(app: AppHandle) -> Result<Option<UpdateInfo>, Str
 
     match updater.check().await {
         Ok(Some(update)) => {
-            log::info!(
-                "Update available: {} -> {}",
-                update.current_version,
-                update.version
-            );
+            log::info!("Update available: {} -> {}", update.current_version, update.version);
             let update_info = UpdateInfo {
                 version: update.version.clone(),
                 current_version: update.current_version.clone(),
                 body: update.body.clone(),
             };
 
-            // Emit available status
             let _ = app.emit(
                 "update-status",
-                UpdateStatus::Available {
-                    update: update_info.clone(),
-                },
+                UpdateStatus::Available { update: update_info.clone() },
             );
 
             Ok(Some(update_info))
         }
         Ok(None) => {
-            log::info!("No updates available, already on latest version");
-            let _ = app.emit("update-status", UpdateStatus::NotAvailable);
+            log::info!("No updates available");
+            if !silent {
+                let _ = app.emit("update-status", UpdateStatus::NotAvailable);
+            }
             Ok(None)
         }
         Err(e) => {
             let error_msg = e.to_string();
             log::warn!("Update check failed: {}", error_msg);
 
-            // Check if it's a "no release" error (404 or decoding error)
-            if error_msg.contains("decoding")
-                || error_msg.contains("404")
-                || error_msg.contains("Not Found")
-            {
-                log::info!("No releases available yet - this is expected for new apps");
-                // Treat as "no update available" instead of error
-                let _ = app.emit("update-status", UpdateStatus::NotAvailable);
+            if error_msg.contains("decoding") || error_msg.contains("404") || error_msg.contains("Not Found") {
+                if !silent {
+                    let _ = app.emit("update-status", UpdateStatus::NotAvailable);
+                }
                 Ok(None)
             } else {
-                let _ = app.emit(
-                    "update-status",
-                    UpdateStatus::Error {
-                        message: error_msg.clone(),
-                    },
-                );
+                if !silent {
+                    let _ = app.emit("update-status", UpdateStatus::Error { message: error_msg.clone() });
+                }
                 Err(format!("Failed to check for updates: {}", error_msg))
             }
         }

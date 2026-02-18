@@ -229,30 +229,35 @@ function GroupSection({
 
       {/* Model Rows */}
       {isExpanded &&
-        table.getRowModel().rows.map((row, index) => (
-          <TableRow
-            key={row.id}
-            data-state={row.getIsSelected() && 'selected'}
-            className={cn(
-              'bg-background',
-              index === table.getRowModel().rows.length - 1 && 'border-b'
-            )}
-          >
-            {row.getVisibleCells().map((cell, cellIndex) => (
-              <TableCell
-                key={cell.id}
-                style={{
-                  width: cell.column.getSize(),
-                  minWidth: cell.column.columnDef.minSize,
-                  maxWidth: cell.column.columnDef.maxSize,
-                }}
-                className={cn(cellIndex === 0 && 'pl-10')}
-              >
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
+        table.getRowModel().rows.map((row, index) => {
+          const isSelected = row.original.isSelected
+          return (
+            <TableRow
+              key={row.id}
+              data-state={isSelected ? 'selected' : undefined}
+              className={cn(
+                'bg-background',
+                index === table.getRowModel().rows.length - 1 && 'border-b',
+                isSelected &&
+                  'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary'
+              )}
+            >
+              {row.getVisibleCells().map((cell, cellIndex) => (
+                <TableCell
+                  key={cell.id}
+                  style={{
+                    width: cell.column.getSize(),
+                    minWidth: cell.column.columnDef.minSize,
+                    maxWidth: cell.column.columnDef.maxSize,
+                  }}
+                  className={cn(cellIndex === 0 && !isSelected && 'pl-10')}
+                >
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          )
+        })}
     </>
   )
 }

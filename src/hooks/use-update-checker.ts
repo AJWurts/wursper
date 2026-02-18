@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-shell'
+import { relaunch } from '@tauri-apps/plugin-process'
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 
@@ -8,23 +9,6 @@ import { analytics, AnalyticsEvents, trackEvent } from '@/lib/analytics'
 
 import type { UpdateStatus } from '@/lib/generated/UpdateStatus'
 
-/**
- * Format bytes to human readable string
- */
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`
-}
-
-/**
- * Hook to handle app update checking and installation
- * - Listens for update status events from Tauri backend
- * - Shows toast notifications for update progress
- * - Auto-checks for updates on startup (after 10 second delay)
- */
 export function useUpdateChecker() {
   const updateToastId = useRef<string | number | null>(null)
 
@@ -72,33 +56,26 @@ export function useUpdateChecker() {
           break
 
         case 'downloading': {
-          const progress = status.progress
-          const percent = progress.percent?.toFixed(0) ?? 0
-          const downloaded = formatBytes(Number(progress.downloaded))
-          const total = progress.total
-            ? formatBytes(Number(progress.total))
-            : 'unknown'
-
+          const percent = status.progress.percent?.toFixed(0) ?? 0
           toast.loading(`Downloading update... ${percent}%`, {
             id: updateToastId.current ?? undefined,
-            description: `${downloaded} / ${total}`,
           })
           break
         }
 
         case 'downloaded':
-          toast.loading('Preparing to install...', {
+          toast.loading('Installing update...', {
             id: updateToastId.current ?? undefined,
           })
           break
 
         case 'installing':
-          toast.success('Update installed! Restart the app to apply.', {
+          toast.success('Update ready! Restart to apply.', {
             id: updateToastId.current ?? undefined,
-            duration: 10000,
+            duration: 30000,
             action: {
-              label: 'Restart later',
-              onClick: () => {},
+              label: 'Restart Now',
+              onClick: () => relaunch(),
             },
           })
           trackEvent(AnalyticsEvents.UPDATE_INSTALLED)
@@ -126,13 +103,11 @@ export function useUpdateChecker() {
     }
   }, [])
 
-  // Auto-check for updates on startup (with delay)
+  // Auto-check for updates on startup (silent - only notify if update available)
   useEffect(() => {
     const timer = setTimeout(() => {
-      invoke('check_for_updates').catch(() => {
-        // Silent fail on startup auto-check
-      })
-    }, 10000) // Check after 10 seconds
+      invoke('check_for_updates', { silent: true }).catch(() => {})
+    }, 10000)
 
     return () => clearTimeout(timer)
   }, [])

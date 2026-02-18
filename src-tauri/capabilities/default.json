@@ -23,6 +23,7 @@
     "core:event:allow-listen",
     "notification:default",
     "macos-permissions:allow-check-accessibility-permission",
-    "macos-permissions:allow-request-accessibility-permission"
+    "macos-permissions:allow-request-accessibility-permission",
+    "process:allow-restart"
   ]
 }

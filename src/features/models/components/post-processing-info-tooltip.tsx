@@ -17,44 +17,12 @@ export function PostProcessingInfoTooltip({
 }: PostProcessingInfoTooltipProps) {
   if (!capabilities) return null
 
-  const getQualityColor = (quality: string) => {
-    switch (quality) {
-      case 'best':
-        return 'text-green-600 dark:text-green-500'
-      case 'good':
-        return 'text-blue-600 dark:text-blue-500'
-      case 'basic':
-        return 'text-orange-600 dark:text-orange-500'
-      default:
-        return ''
-    }
-  }
+  const hasContent =
+    capabilities.features.length > 0 ||
+    (capabilities.limitations && capabilities.limitations.length > 0) ||
+    capabilities.note
 
-  const getSpeedColor = (speed: string) => {
-    switch (speed) {
-      case 'fast':
-        return 'text-green-600 dark:text-green-500'
-      case 'medium':
-        return 'text-orange-600 dark:text-orange-500'
-      case 'slow':
-        return 'text-red-600 dark:text-red-500'
-      default:
-        return ''
-    }
-  }
-
-  const getQualityLabel = (quality: string) => {
-    switch (quality) {
-      case 'best':
-        return 'Best'
-      case 'good':
-        return 'Good'
-      case 'basic':
-        return 'Basic'
-      default:
-        return quality
-    }
-  }
+  if (!hasContent) return null
 
   return (
     <Tooltip>
@@ -68,38 +36,17 @@ export function PostProcessingInfoTooltip({
       </TooltipTrigger>
       <TooltipContent
         side="right"
-        className="w-72 p-4 bg-popover border border-border shadow-xl backdrop-blur-none"
+        className="w-64 p-3 bg-popover border border-border shadow-xl backdrop-blur-none"
         sideOffset={8}
         showArrow={false}
       >
         <div className="space-y-3">
-          {/* Metrics */}
-          <div className="grid grid-cols-2 gap-3 text-xs pb-3 border-b border-border">
-            <div>
-              <div className="text-muted-foreground mb-1">Quality</div>
-              <div
-                className={`font-semibold capitalize ${getQualityColor(capabilities.quality)}`}
-              >
-                {getQualityLabel(capabilities.quality)}
-              </div>
-            </div>
-            <div>
-              <div className="text-muted-foreground mb-1">Speed</div>
-              <div
-                className={`font-semibold capitalize ${getSpeedColor(capabilities.speed)}`}
-              >
-                {capabilities.speed}
-              </div>
-            </div>
-          </div>
-
-          {/* Features */}
           {capabilities.features.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-foreground mb-2">
+              <div className="text-xs font-semibold text-foreground mb-1.5">
                 Features
               </div>
-              <div className="text-xs text-muted-foreground space-y-1">
+              <div className="text-xs text-muted-foreground space-y-0.5">
                 {capabilities.features.map(feature => (
                   <div key={feature}>• {feature}</div>
                 ))}
@@ -107,13 +54,12 @@ export function PostProcessingInfoTooltip({
             </div>
           )}
 
-          {/* Limitations */}
           {capabilities.limitations && capabilities.limitations.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-orange-600 dark:text-orange-500 mb-2">
+              <div className="text-xs font-semibold text-orange-600 dark:text-orange-500 mb-1.5">
                 Limitations
               </div>
-              <div className="text-xs text-muted-foreground space-y-1">
+              <div className="text-xs text-muted-foreground space-y-0.5">
                 {capabilities.limitations.map(limitation => (
                   <div key={limitation}>• {limitation}</div>
                 ))}
@@ -121,7 +67,6 @@ export function PostProcessingInfoTooltip({
             </div>
           )}
 
-          {/* Note */}
           {capabilities.note && (
             <div className="text-xs text-muted-foreground italic pt-2 border-t border-border">
               {capabilities.note}

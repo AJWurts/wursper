@@ -1,10 +1,10 @@
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { CheckIcon, CopyIcon } from 'lucide-react'
-import { AnimatePresence, motion } from 'motion/react'
 import * as React from 'react'
 
 import { Button, ButtonProps } from '@/components/ui/button'
 import { useControlledState } from '@/hooks/use-controlled-state'
+import { cn } from '@/lib/cn'
 
 type CopyButtonProps = ButtonProps & {
   content: string
@@ -48,22 +48,25 @@ function CopyButton({
     [onClick, copied, content, setIsCopied, onCopiedChange, delay]
   )
 
-  const Icon = isCopied ? CheckIcon : CopyIcon
-
   return (
     <Button data-slot="copy-button" onClick={handleCopy} {...props}>
-      <AnimatePresence mode="popLayout">
-        <motion.span
-          key={isCopied ? 'check' : 'copy'}
-          data-slot="copy-button-icon"
-          initial={{ scale: 0, opacity: 0.4, filter: 'blur(4px)' }}
-          animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
-          exit={{ scale: 0, opacity: 0.4, filter: 'blur(4px)' }}
-          transition={{ duration: 0.25 }}
-        >
-          <Icon />
-        </motion.span>
-      </AnimatePresence>
+      <span
+        data-slot="copy-button-icon"
+        className="relative flex items-center justify-center"
+      >
+        <CopyIcon
+          className={cn(
+            'h-3.5 w-3.5 transition-all duration-200',
+            isCopied ? 'scale-0 opacity-0' : 'scale-100 opacity-100'
+          )}
+        />
+        <CheckIcon
+          className={cn(
+            'h-3.5 w-3.5 absolute transition-all duration-200 text-emerald-500',
+            isCopied ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
+          )}
+        />
+      </span>
     </Button>
   )
 }

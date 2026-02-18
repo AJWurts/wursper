@@ -15,31 +15,10 @@ interface ModelInfoTooltipProps {
 export function ModelInfoTooltip({ capabilities }: ModelInfoTooltipProps) {
   if (!capabilities) return null
 
-  const getAccuracyColor = (accuracy: string) => {
-    switch (accuracy) {
-      case 'high':
-        return 'text-green-600 dark:text-green-500'
-      case 'medium':
-        return 'text-orange-600 dark:text-orange-500'
-      case 'low':
-        return 'text-red-600 dark:text-red-500'
-      default:
-        return ''
-    }
-  }
+  const hasContent =
+    capabilities.features.length > 0 || capabilities.bestFor.length > 0
 
-  const getSpeedColor = (speed: string) => {
-    switch (speed) {
-      case 'fast':
-        return 'text-green-600 dark:text-green-500'
-      case 'medium':
-        return 'text-orange-600 dark:text-orange-500'
-      case 'slow':
-        return 'text-red-600 dark:text-red-500'
-      default:
-        return ''
-    }
-  }
+  if (!hasContent) return null
 
   return (
     <Tooltip>
@@ -53,44 +32,17 @@ export function ModelInfoTooltip({ capabilities }: ModelInfoTooltipProps) {
       </TooltipTrigger>
       <TooltipContent
         side="right"
-        className="w-72 p-4 bg-popover border border-border shadow-xl backdrop-blur-none"
+        className="w-64 p-3 bg-popover border border-border shadow-xl backdrop-blur-none"
         sideOffset={8}
         showArrow={false}
       >
         <div className="space-y-3">
-          {/* Metrics */}
-          <div className="grid grid-cols-3 gap-3 text-xs pb-3 border-b border-border">
-            <div>
-              <div className="text-muted-foreground mb-1">Accuracy</div>
-              <div
-                className={`font-semibold capitalize ${getAccuracyColor(capabilities.accuracy)}`}
-              >
-                {capabilities.accuracy}
-              </div>
-            </div>
-            <div>
-              <div className="text-muted-foreground mb-1">Speed</div>
-              <div
-                className={`font-semibold capitalize ${getSpeedColor(capabilities.speed)}`}
-              >
-                {capabilities.speed}
-              </div>
-            </div>
-            <div>
-              <div className="text-muted-foreground mb-1">Languages</div>
-              <div className="font-semibold text-foreground">
-                {capabilities.languages}+
-              </div>
-            </div>
-          </div>
-
-          {/* Features */}
           {capabilities.features.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-foreground mb-2">
+              <div className="text-xs font-semibold text-foreground mb-1.5">
                 Features
               </div>
-              <div className="text-xs text-muted-foreground space-y-1">
+              <div className="text-xs text-muted-foreground space-y-0.5">
                 {capabilities.features.map(feature => (
                   <div key={feature}>• {feature}</div>
                 ))}
@@ -98,13 +50,12 @@ export function ModelInfoTooltip({ capabilities }: ModelInfoTooltipProps) {
             </div>
           )}
 
-          {/* Best For */}
           {capabilities.bestFor.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-foreground mb-2">
+              <div className="text-xs font-semibold text-foreground mb-1.5">
                 Best For
               </div>
-              <div className="text-xs text-muted-foreground space-y-1">
+              <div className="text-xs text-muted-foreground space-y-0.5">
                 {capabilities.bestFor.map(useCase => (
                   <div key={useCase}>• {useCase}</div>
                 ))}

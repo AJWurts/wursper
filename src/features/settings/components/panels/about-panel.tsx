@@ -15,11 +15,8 @@ export function AboutPanel() {
   const handleCheckForUpdates = async () => {
     setIsCheckingUpdate(true)
     try {
-      // The check_for_updates command emits events that app.tsx listens to
-      // So we just need to trigger it here
-      await invoke('check_for_updates')
+      await invoke('check_for_updates', { silent: false })
     } catch (error) {
-      // Error is handled by the event listener in app.tsx
       console.error('Failed to check for updates:', error)
     } finally {
       setIsCheckingUpdate(false)

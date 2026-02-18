@@ -63,14 +63,15 @@ export function ModelsTable({
       <h2 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-widest">
         Available Models
       </h2>
-      <div className="rounded-md border">
-        <Table className="table-fixed">
+      <div className="rounded-md border overflow-hidden">
+        <Table>
           <TableHeader>
             {table.getHeaderGroups().map(headerGroup => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map(header => (
                   <TableHead
                     key={header.id}
+                    className="text-[10px] uppercase tracking-wider px-2 py-2"
                     style={{
                       width: header.getSize(),
                       minWidth: header.column.columnDef.minSize,
@@ -90,28 +91,37 @@ export function ModelsTable({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map(row => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && 'selected'}
-                >
-                  {row.getVisibleCells().map(cell => (
-                    <TableCell
-                      key={cell.id}
-                      style={{
-                        width: cell.column.getSize(),
-                        minWidth: cell.column.columnDef.minSize,
-                        maxWidth: cell.column.columnDef.maxSize,
-                      }}
-                    >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map(row => {
+                const isSelected = row.original.isSelected
+                return (
+                  <TableRow
+                    key={row.id}
+                    data-state={isSelected ? 'selected' : undefined}
+                    className={
+                      isSelected
+                        ? 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary'
+                        : ''
+                    }
+                  >
+                    {row.getVisibleCells().map(cell => (
+                      <TableCell
+                        key={cell.id}
+                        className="px-2 py-2"
+                        style={{
+                          width: cell.column.getSize(),
+                          minWidth: cell.column.columnDef.minSize,
+                          maxWidth: cell.column.columnDef.maxSize,
+                        }}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )
+              })
             ) : (
               <TableRow>
                 <TableCell

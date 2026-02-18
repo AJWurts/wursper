@@ -165,18 +165,30 @@
   font-variation-settings: 'wdth' 100;
 }
 
-/* Sonner Toast Positioning - Ensure bottom-right in production */
+/* Sonner Toast Positioning */
 [data-sonner-toaster] {
   position: fixed !important;
-  bottom: 0 !important;
-  right: 0 !important;
+  bottom: 16px !important;
+  right: 16px !important;
   top: auto !important;
   left: auto !important;
   transform: none !important;
-  margin: 16px !important;
   z-index: 9999 !important;
+  width: 380px !important;
 }
 
 [data-sonner-toast] {
-  margin-bottom: 8px !important;
+  width: 100% !important;
+  animation: toast-slide-in 0.2s ease-out !important;
+}
+
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

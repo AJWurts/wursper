@@ -89,6 +89,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_mic_recorder::init())
@@ -342,6 +343,7 @@ pub fn run() {
             force_reset_recording,
             // Clipboard utilities
             features::clipboard::get_focused_app,
+            features::clipboard::check_accessibility_permission,
             // Shortcuts management
             update_voice_input_shortcut,
             update_paste_shortcut,

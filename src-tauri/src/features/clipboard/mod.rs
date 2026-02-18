@@ -76,11 +76,39 @@ pub async fn get_focused_app() -> Result<FocusedApp, String> {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn check_accessibility_trusted() -> bool {
+    unsafe {
+        #[link(name = "ApplicationServices", kind = "framework")]
+        extern "C" {
+            fn AXIsProcessTrusted() -> u8;
+        }
+        AXIsProcessTrusted() != 0
+    }
+}
+
+#[command]
+pub fn check_accessibility_permission() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        check_accessibility_trusted()
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
 /// Copy text to clipboard and simulate paste at cursor position
 #[command]
 pub async fn copy_and_paste(text: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
+        if !check_accessibility_trusted() {
+            logger::warn("Accessibility permission not granted - paste may fail");
+        }
+
         // DEBUG: Check which app is focused before pasting
         let focused_app = match get_focused_app().await {
             Ok(app) => {
@@ -157,12 +185,13 @@ pub async fn copy_and_paste(text: String) -> Result<(), String> {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            logger::error(&format!("Paste command failed: {}", stderr));
-        } else {
-            logger::debug("Paste command sent successfully");
-        }
+            logger::error(&format!("Paste failed: {}", stderr));
 
-        logger::debug("===================");
+            if stderr.contains("not allowed") || stderr.contains("assistive") || stderr.contains("1002") {
+                return Err("Accessibility permission not granted. Enable Dicta in System Settings → Privacy & Security → Accessibility".to_string());
+            }
+            return Err(format!("Paste failed: {}", stderr));
+        }
 
         Ok(())
     }

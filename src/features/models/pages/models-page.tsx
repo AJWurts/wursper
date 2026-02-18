@@ -4,13 +4,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { useModelsStore, initializeModels, type TranscriptionModel } from '..'
 import { ApiKeyModal } from '../components/api-key-modal'
-import { ModelsHeader, ModelsSearch } from '../components/header'
+import {
+  ModelsHeader,
+  ModelsSearch,
+  QuickFilters,
+  type FilterType,
+} from '../components/header'
 import { ModelsTable } from '../components/table'
+import { getModelCapabilities, getPostProcessingCapabilities } from '../model-capabilities'
 import {
   downloadModel,
   deleteModel,
   syncModels,
-  createModelColumns,
+  createSTTColumns,
+  createPostProcessingColumns,
 } from '../utils'
 
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
@@ -31,6 +38,7 @@ export function ModelsPage() {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState('')
+  const [quickFilter, setQuickFilter] = useState<FilterType>('all')
 
   const [apiKeyModalModel, setApiKeyModalModel] =
     useState<TranscriptionModel | null>(null)
@@ -65,19 +73,18 @@ export function ModelsPage() {
     await syncModels(syncDefaultModels)
   }
 
-  const columns = useMemo(
-    () =>
-      createModelColumns({
-        downloading,
-        onSelectModel: id => void selectModel(id),
-        onSetApiKey: setApiKeyModalModel,
-        onRemoveApiKey: id => void removeApiKey(id),
-        onDownloadModel: handleDownloadModel,
-        onDeleteModel: handleDeleteModel,
-        onRefreshStatus: async id => void refreshModelStatus(id),
-        onStartModel: async id => void startLocalModel(id),
-        onStopModel: async id => void stopLocalModel(id),
-      }),
+  const columnActions = useMemo(
+    () => ({
+      downloading,
+      onSelectModel: (id: string) => void selectModel(id),
+      onSetApiKey: setApiKeyModalModel,
+      onRemoveApiKey: (id: string) => void removeApiKey(id),
+      onDownloadModel: handleDownloadModel,
+      onDeleteModel: handleDeleteModel,
+      onRefreshStatus: async (id: string) => void refreshModelStatus(id),
+      onStartModel: async (id: string) => void startLocalModel(id),
+      onStopModel: async (id: string) => void stopLocalModel(id),
+    }),
     [
       downloading,
       selectModel,
@@ -90,6 +97,16 @@ export function ModelsPage() {
     ]
   )
 
+  const sttColumns = useMemo(
+    () => createSTTColumns(columnActions),
+    [columnActions]
+  )
+
+  const postProcessingColumns = useMemo(
+    () => createPostProcessingColumns(columnActions),
+    [columnActions]
+  )
+
   const sttModels = useMemo(
     () => models.filter(m => m.purpose === 'speech-to-text'),
     [models]
@@ -99,12 +116,67 @@ export function ModelsPage() {
     [models]
   )
 
+  // Apply quick filters
+  const filterModels = useCallback(
+    (modelList: TranscriptionModel[]) => {
+      if (quickFilter === 'all') return modelList
+
+      return modelList.filter(m => {
+        const isSTT = m.purpose === 'speech-to-text'
+        const capabilities = isSTT
+          ? getModelCapabilities(m.id)
+          : getPostProcessingCapabilities(m.id)
+
+        switch (quickFilter) {
+          case 'cloud':
+            return m.type === 'cloud'
+          case 'local':
+            return m.type === 'local'
+          case 'high-accuracy':
+            if (!capabilities) return false
+            if (isSTT && 'accuracy' in capabilities) {
+              return capabilities.accuracy === 'high'
+            }
+            if (!isSTT && 'quality' in capabilities) {
+              return capabilities.quality === 'best'
+            }
+            return false
+          case 'fast':
+            return capabilities?.speed === 'fast'
+          case 'configured':
+            if (m.type === 'cloud') return m.hasApiKey
+            return m.isDownloaded
+          default:
+            return true
+        }
+      })
+    },
+    [quickFilter]
+  )
+
+  const filteredSttModels = useMemo(
+    () => filterModels(sttModels),
+    [filterModels, sttModels]
+  )
+  const filteredPostProcessingModels = useMemo(
+    () => filterModels(postProcessingModels),
+    [filterModels, postProcessingModels]
+  )
+
   const activeModels =
     activeTab === 'speech-to-text' ? sttModels : postProcessingModels
 
   const cloudModelsCount = activeModels.filter(m => m.type === 'cloud').length
   const localModelsCount = activeModels.filter(m => m.type === 'local').length
+  const configuredCount = activeModels.filter(m =>
+    m.type === 'cloud' ? m.hasApiKey : m.isDownloaded
+  ).length
   const selectedModel = activeModels.find(m => m.isSelected)
+
+  // Reset quick filter when switching tabs
+  useEffect(() => {
+    setQuickFilter('all')
+  }, [activeTab])
 
   if (!initialized) {
     return (
@@ -130,7 +202,7 @@ export function ModelsPage() {
         }
         className="mt-2"
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <TabsList>
             <TabsTrigger value="speech-to-text">
               Speech-to-Text ({sttModels.length})
@@ -142,10 +214,18 @@ export function ModelsPage() {
           <ModelsSearch value={globalFilter ?? ''} onChange={setGlobalFilter} />
         </div>
 
-        <TabsContent value="speech-to-text" className="mt-6">
+        <div className="mt-4">
+          <QuickFilters
+            activeFilter={quickFilter}
+            onFilterChange={setQuickFilter}
+            configuredCount={configuredCount}
+          />
+        </div>
+
+        <TabsContent value="speech-to-text" className="mt-4">
           <ModelsTable
-            models={sttModels}
-            columns={columns}
+            models={filteredSttModels}
+            columns={sttColumns}
             sorting={sorting}
             columnFilters={columnFilters}
             globalFilter={globalFilter}
@@ -155,10 +235,10 @@ export function ModelsPage() {
           />
         </TabsContent>
 
-        <TabsContent value="post-processing" className="mt-6">
+        <TabsContent value="post-processing" className="mt-4">
           <ModelsTable
-            models={postProcessingModels}
-            columns={columns}
+            models={filteredPostProcessingModels}
+            columns={postProcessingColumns}
             sorting={sorting}
             columnFilters={columnFilters}
             globalFilter={globalFilter}
