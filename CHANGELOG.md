@@ -1,3 +1,20 @@
+## [0.0.6](https://github.com/nitintf/dicta/compare/v0.0.5...v0.0.6) (2026-02-18)
+
+
+### Bug Fixes
+
+* import lint issue ([ca6fa2d](https://github.com/nitintf/dicta/commit/ca6fa2d1958a67ddcd801d8326236a26c3d12ea2))
+* toast window no longer blocks mouse clicks ([6c190c4](https://github.com/nitintf/dicta/commit/6c190c4191fc5fcdcb24aece740bf2a445ceca71))
+* toast window no longer blocks mouse events when hidden ([f0687ad](https://github.com/nitintf/dicta/commit/f0687adabb46d71754e1759e20cc49d6451aed4f))
+* use NSPanel order_out/order_front for toast window visibility ([8aacacc](https://github.com/nitintf/dicta/commit/8aacacc9f4e63e030024f94a45ff394369cea7aa))
+
+
+### Features
+
+* add audio upload functionality with dialog and transcription support and some optimizations ([894e3c5](https://github.com/nitintf/dicta/commit/894e3c515ba301dd5d6a5c4dec7feafb25af523d))
+
+
+
 ## [0.0.5](https://github.com/nitintf/dicta/compare/v0.0.4...v0.0.5) (2026-02-17)
 
 
