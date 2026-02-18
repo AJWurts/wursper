@@ -1,5 +1,5 @@
-import type { Transcription } from '@/features/transcriptions'
 import type { FilterState } from '../components/search-filter-bar'
+import type { Transcription } from '@/features/transcriptions'
 
 /**
  * Check if a timestamp is from today

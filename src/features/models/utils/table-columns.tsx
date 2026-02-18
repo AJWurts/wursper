@@ -1,4 +1,10 @@
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+
+import {
   ModelActionsMenu,
   ModelCell,
   ModelConfigStatus,
@@ -7,18 +13,16 @@ import {
   ModelSpeedCell,
   ModelLanguagesCell,
 } from '../components/table'
-
 import {
   getModelCapabilities,
   getPostProcessingCapabilities,
 } from '../model-capabilities'
-import { getModelPricing, getModelResources, formatCost, formatRAM } from '../model-resources'
-
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+  getModelPricing,
+  getModelResources,
+  formatCost,
+  formatRAM,
+} from '../model-resources'
 
 import type { TranscriptionModel } from '../types'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -35,7 +39,13 @@ export interface ColumnActions {
   onStopModel: (id: string) => Promise<void>
 }
 
-function CostRAMCell({ modelId, isLocal }: { modelId: string; isLocal: boolean }) {
+function CostRAMCell({
+  modelId,
+  isLocal,
+}: {
+  modelId: string
+  isLocal: boolean
+}) {
   const pricing = getModelPricing(modelId)
   const resources = getModelResources(modelId)
 
@@ -44,17 +54,20 @@ function CostRAMCell({ modelId, isLocal }: { modelId: string; isLocal: boolean }
 
   if (isLocal) {
     const ramGB = resources?.ramGB ?? 0
-    const ramColor = ramGB <= 2
-      ? 'text-emerald-600/80 dark:text-emerald-400/70'
-      : ramGB <= 4
-        ? 'text-amber-600/80 dark:text-amber-400/70'
-        : 'text-orange-600/80 dark:text-orange-400/70'
+    const ramColor =
+      ramGB <= 2
+        ? 'text-emerald-600/80 dark:text-emerald-400/70'
+        : ramGB <= 4
+          ? 'text-amber-600/80 dark:text-amber-400/70'
+          : 'text-orange-600/80 dark:text-orange-400/70'
 
     return (
       <Tooltip>
         <TooltipTrigger asChild>
           <div className="flex flex-col cursor-help">
-            <span className="text-[10px] font-medium text-emerald-600/80 dark:text-emerald-400/70">Free</span>
+            <span className="text-[10px] font-medium text-emerald-600/80 dark:text-emerald-400/70">
+              Free
+            </span>
             <span className={`text-[10px] ${ramColor}`}>{ramText}</span>
           </div>
         </TooltipTrigger>
