@@ -26,9 +26,7 @@ export function ModelLanguagesCell({ capabilities }: ModelLanguagesCellProps) {
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
-        {languages === 1
-          ? 'English only'
-          : `Supports ${languages}+ languages`}
+        {languages === 1 ? 'English only' : `Supports ${languages}+ languages`}
       </TooltipContent>
     </Tooltip>
   )

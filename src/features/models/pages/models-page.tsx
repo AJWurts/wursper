@@ -11,7 +11,10 @@ import {
   type FilterType,
 } from '../components/header'
 import { ModelsTable } from '../components/table'
-import { getModelCapabilities, getPostProcessingCapabilities } from '../model-capabilities'
+import {
+  getModelCapabilities,
+  getPostProcessingCapabilities,
+} from '../model-capabilities'
 import {
   downloadModel,
   deleteModel,

@@ -31,7 +31,7 @@ export interface ModelResources {
 export const STT_PRICING: Record<string, ModelPricing> = {
   'whisper-1': { costPerMinute: 0.006 }, // $0.006/min
   'google-cloud-speech': { costPerMinute: 0.024 }, // $0.024/min standard
-  'scribe_v1': { costPerMinute: 0.007 }, // ~$0.40/hour
+  scribe_v1: { costPerMinute: 0.007 }, // ~$0.40/hour
 }
 
 // Post-Processing Cloud Model Pricing (per 1M tokens)

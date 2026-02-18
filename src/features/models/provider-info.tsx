@@ -139,21 +139,31 @@ export const getProviderInfo = (
       if (modelId?.includes('llama')) {
         return {
           name: 'local-llm',
-          icon: <LocalIcon src="/icons/meta.svg" alt="Meta Llama" invert={false} />,
+          icon: (
+            <LocalIcon src="/icons/meta.svg" alt="Meta Llama" invert={false} />
+          ),
           color: 'text-blue-600',
         }
       }
       if (modelId?.includes('mistral')) {
         return {
           name: 'local-llm',
-          icon: <LocalIcon src="/icons/mistral.svg" alt="Mistral" invert={false} />,
+          icon: (
+            <LocalIcon src="/icons/mistral.svg" alt="Mistral" invert={false} />
+          ),
           color: 'text-orange-600',
         }
       }
       if (modelId?.includes('phi')) {
         return {
           name: 'local-llm',
-          icon: <LocalIcon src="/icons/microsoft.svg" alt="Microsoft Phi" invert={false} />,
+          icon: (
+            <LocalIcon
+              src="/icons/microsoft.svg"
+              alt="Microsoft Phi"
+              invert={false}
+            />
+          ),
           color: 'text-blue-600',
         }
       }

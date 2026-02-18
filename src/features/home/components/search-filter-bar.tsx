@@ -248,12 +248,16 @@ export function SearchFilterBar({
                   {filteredCount}
                 </span>{' '}
                 of{' '}
-                <span className="font-medium text-foreground">{totalCount}</span>{' '}
+                <span className="font-medium text-foreground">
+                  {totalCount}
+                </span>{' '}
                 transcriptions
               </>
             ) : (
               <>
-                <span className="font-medium text-foreground">{totalCount}</span>{' '}
+                <span className="font-medium text-foreground">
+                  {totalCount}
+                </span>{' '}
                 transcriptions
               </>
             )}

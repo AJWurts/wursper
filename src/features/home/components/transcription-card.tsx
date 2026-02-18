@@ -61,22 +61,20 @@ export function TranscriptionCard({
               )}
             </div>
             <p className="text-[13px] leading-relaxed text-foreground line-clamp-2 mb-1.5">
-              {highlightedText ? (
-                highlightedText.map((segment, i) =>
-                  segment.isHighlight ? (
-                    <mark
-                      key={i}
-                      className="bg-yellow-200/80 dark:bg-yellow-500/30 text-foreground rounded-sm px-0.5"
-                    >
-                      {segment.text}
-                    </mark>
-                  ) : (
-                    <span key={i}>{segment.text}</span>
+              {highlightedText
+                ? highlightedText.map((segment, i) =>
+                    segment.isHighlight ? (
+                      <mark
+                        key={i}
+                        className="bg-yellow-200/80 dark:bg-yellow-500/30 text-foreground rounded-sm px-0.5"
+                      >
+                        {segment.text}
+                      </mark>
+                    ) : (
+                      <span key={i}>{segment.text}</span>
+                    )
                   )
-                )
-              ) : (
-                transcription.text
-              )}
+                : transcription.text}
             </p>
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
               <span>{formatTime(transcription.timestamp)}</span>
