@@ -210,8 +210,21 @@ pub fn setup_toast_window(app: &AppHandle) -> tauri::Result<()> {
     let toast_window = toast_builder.build()?;
     log::info!("Toast window built successfully");
 
-    // Convert to NSPanel and configure
+    // Set ignoresMouseEvents BEFORE converting to panel
+    // This ensures the toast never blocks mouse clicks (even when hidden)
+    // The toast is display-only and doesn't need mouse interaction
     use tauri_nspanel::WebviewWindowExt;
+    if let Ok(ns_window) = toast_window.ns_window() {
+        unsafe {
+            use objc2::msg_send;
+            use objc2::runtime::Bool;
+            let ns_window: *mut objc2::runtime::AnyObject = ns_window.cast();
+            let _: () = msg_send![ns_window, setIgnoresMouseEvents: Bool::from(true)];
+            log::info!("Toast window set to ignore mouse events");
+        }
+    }
+
+    // Convert to NSPanel and configure
 
     match toast_window.to_panel() {
         Ok(panel) => {
