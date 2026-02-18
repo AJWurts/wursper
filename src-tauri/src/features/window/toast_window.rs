@@ -1,6 +1,30 @@
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+
+/// Sets whether the window should ignore mouse events.
+/// When true, clicks pass through to windows below.
+#[cfg(target_os = "macos")]
+fn set_ignores_mouse_events(window: &WebviewWindow, ignore: bool) {
+    use tauri_nspanel::WebviewWindowExt;
+
+    if let Ok(ns_window) = window.ns_window() {
+        unsafe {
+            use objc2::msg_send;
+            use objc2::runtime::Bool;
+
+            let ns_window: *mut objc2::runtime::AnyObject = ns_window.cast();
+            let _: () = msg_send![ns_window, setIgnoresMouseEvents: Bool::from(ignore)];
+
+            log::debug!("Toast window ignoresMouseEvents set to: {}", ignore);
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_ignores_mouse_events(_window: &WebviewWindow, _ignore: bool) {
+    // No-op on other platforms
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -45,8 +69,10 @@ pub fn show_toast(
         log::warn!("Failed to position toast window: {}", e);
     }
 
-    // Show the toast window
+    // Show the toast window and enable mouse events
     if let Some(window) = app.get_webview_window("toast") {
+        // Enable mouse events when showing
+        set_ignores_mouse_events(&window, false);
         let _ = window.show();
     }
 
@@ -66,6 +92,8 @@ pub fn show_toast(
 /// Hides the toast window
 pub fn hide_toast(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("toast") {
+        // Disable mouse events when hiding to prevent blocking clicks
+        set_ignores_mouse_events(&window, true);
         let _ = window.hide();
     }
 
@@ -237,6 +265,11 @@ pub fn setup_toast_window(app: &AppHandle) -> tauri::Result<()> {
             log::info!("Toast panel configured for full-screen and multi-monitor support");
         }
         Err(e) => log::error!("Failed to convert toast to NSPanel: {:?}", e),
+    }
+
+    // Set initial state to ignore mouse events (window starts hidden)
+    if let Some(window) = app.get_webview_window("toast") {
+        set_ignores_mouse_events(&window, true);
     }
 
     log::info!("Toast window ready at ({}, {})", toast_x, toast_y);
