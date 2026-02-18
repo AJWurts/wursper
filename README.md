@@ -1,217 +1,127 @@
 <div align="center">
-  <img src="public/icon.png" alt="Dicta Logo" width="120" height="120">
+  <img src="public/icon.png" alt="Dicta" width="100" height="100">
 
 # Dicta
 
-**Dicta is a sleek, Spotlight-inspired voice transcription app for macOS, capture your ideas instantly with AI-powered accuracy.**
+Voice-to-text for macOS. Press a shortcut, speak, and your words appear as text.
 
-[Features](#-features) •
-[Installation](#-installation) •
-[Tech Stack](#-tech-stack) •
-[Development](#-development) •
-[Contributing](#-contributing)
-
+[![CI](https://github.com/nitintf/dicta/actions/workflows/ci.yml/badge.svg)](https://github.com/nitintf/dicta/actions/workflows/ci.yml)
+[![Release](https://github.com/nitintf/dicta/actions/workflows/release.yml/badge.svg)](https://github.com/nitintf/dicta/actions/workflows/release.yml)
+[![Version](https://img.shields.io/badge/version-0.0.6-blue.svg)](https://github.com/nitintf/dicta/releases)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos)
-<img src="https://img.shields.io/badge/React-19-61dafb?logo=react" alt="React 19">
-<img src="https://img.shields.io/badge/Tauri-2.5-ffc131?logo=tauri" alt="Tauri 2.5">
-<img src="https://img.shields.io/badge/TypeScript-5.8-3178c6?logo=typescript" alt="TypeScript">
-<img src="https://img.shields.io/badge/Rust-1.83-ce422b?logo=rust" alt="Rust">
 
 </div>
 
 ---
 
-## Features
+## What is Dicta?
 
-### Voice Recording
+Dicta is a native macOS app that transcribes your voice to text. It sits in your menu bar, ready to capture your thoughts with a global keyboard shortcut. The transcribed text is automatically copied to your clipboard or pasted directly into the active application.
 
-- **Global Shortcut** - Press `Alt+Space` anywhere to start recording
-- **Spotlight-Style UI** - Beautiful floating panel that appears instantly
-- **Visual Feedback** - Real-time audio waveform visualization
-- **Auto-Save** - Recordings are automatically saved to your library
+**Key highlights:**
 
-### AI Transcription
-
-- **Multiple Providers** - Support for OpenAI Whisper, Google Speech-to-Text, Deepgram, AssemblyAI, ElevenLabs, and Local Whisper
-- **High Accuracy** - AI-powered transcription with excellent accuracy
-- **Multiple Languages** - Transcribe in various languages
-- **Local Processing** - Option to run Whisper models locally for privacy
-
-### Transcription Management
-
-- **Library View** - Browse all your transcriptions with search and filtering
-- **Rich Metadata** - View word count, duration, timestamp, and model used
-- **Quick Actions** - Copy, delete, or export transcriptions instantly
-- **Auto-Paste** - Optionally paste transcriptions directly to active apps
-
-### Customization
-
-- **Text Styles (Vibes)** - Apply different formatting styles to your transcriptions
-  - Personal: Polished, Relaxed, Chill
-  - Work: Executive, Collaborative, Casual
-  - Email: Professional, Friendly, Enthusiastic
-- **Custom Vibes** - Create your own formatting styles with custom prompts
-- **Text Snippets** - Create reusable text expansions
-- **Vocabulary** - Add custom words for better transcription accuracy
+- Spotlight-style floating window with real-time waveform
+- Multiple transcription engines (cloud and local)
+- Text formatting with customizable "vibes" (professional, casual, email styles)
+- Full transcription history with search and filtering
+- Privacy-focused local processing option
 
 ## Installation
 
-### From Release (Recommended)
+### Download
 
-1. Download the latest `.dmg` from [Releases](https://github.com/yourusername/dicta/releases)
-2. Open the `.dmg` and drag Dicta to Applications
-3. Remove Gatekeeper quarantine (if you see "Apple cannot verify" warning):
+Get the latest release from the [Releases page](https://github.com/nitintf/dicta/releases).
+
+1. Download the `.dmg` file
+2. Drag Dicta to your Applications folder
+3. If macOS shows a security warning, run:
    ```bash
    xattr -dr com.apple.quarantine /Applications/Dicta.app
    ```
-4. Launch Dicta and grant microphone permissions when prompted
+4. Launch Dicta and grant microphone access when prompted
 
-### From **Source**
+### Build from source
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/dicta.git
+git clone https://github.com/nitintf/dicta.git
 cd dicta
-
-# Install dependencies
 pnpm install
-
-# Build for production
 pnpm tauri build
-
-# The built app will be in src-tauri/target/release/bundle/macos/
 ```
 
-## Tech Stack
+The app bundle will be in `src-tauri/target/release/bundle/macos/`.
 
-### Frontend
+## Usage
 
-- **React 19** - Modern UI framework with latest features
-- **TypeScript** - Type-safe development
-- **Tailwind CSS 4** - Utility-first styling
-- **Radix UI** - Accessible component primitives
-- **Zustand** - Lightweight state management with multi-window sync
-- **Motion** - Smooth animations
-- **React Router 7** - Client-side routing
+1. Press `Option + Space` (configurable) to open the voice input window
+2. Speak your text
+3. Release the shortcut or press it again to stop
+4. Text is transcribed and copied to clipboard (or pasted directly)
 
-### Backend
+### Transcription Providers
 
-- **Tauri 2.5** - Rust-powered desktop framework
-- **Rust** - High-performance native backend
-- **macOS NSPanel** - Native spotlight-style window
-- **Tauri Plugins** - Store, Clipboard, Shell, Autostart
+| Provider | Type | Notes |
+|----------|------|-------|
+| OpenAI Whisper | Cloud | High accuracy, requires API key |
+| Google Speech-to-Text | Cloud | Fast, requires API key |
+| AssemblyAI | Cloud | Advanced features, requires API key |
+| ElevenLabs | Cloud | High quality, requires API key |
+| Local Whisper | Local | Privacy-focused, runs on your Mac |
+| Apple Speech | Local | Built-in, no setup required |
 
-### AI & Transcription
+### Text Styles (Vibes)
 
-- **OpenAI API** - Whisper and GPT models
-- **Google Cloud** - Speech-to-Text API
-- **Deepgram** - Real-time transcription (WIP)
-- **AssemblyAI** - Advanced transcription features (WIP)
-- **ElevenLabs** - High-quality voice AI
-- **Local Whisper** - Privacy-focused local processing
+Transform your transcriptions with AI-powered formatting:
 
-## 🚀 Development
+- **Professional** — Clean, formal language for work
+- **Casual** — Relaxed, conversational tone
+- **Email** — Properly formatted email text
+- **Custom** — Create your own formatting rules
 
-### Prerequisites
+## Development
 
-- **Node.js** 20.19+ or 22.12+
-- **pnpm** 8.0+
-- **Rust** 1.75+
-- **Xcode Command Line Tools** (macOS)
+### Requirements
+
+- Node.js 20.19+ or 22.12+
+- pnpm 8+
+- Rust 1.75+
+- Xcode Command Line Tools
 
 ### Setup
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Run in development mode
 pnpm tauri dev
-
-# Build for production
-pnpm tauri build
 ```
 
-### Code Quality
+### Commands
 
 ```bash
-# Lint code
-pnpm lint
-pnpm lint:fix
-
-# Format code
-pnpm format:all
-
-# Type check
-pnpm build  # TypeScript compilation happens here
+pnpm tauri dev       # Development mode with hot reload
+pnpm tauri build     # Production build
+pnpm lint:fix        # Fix linting issues
+pnpm format:all      # Format TypeScript and Rust code
 ```
 
-## 🤝 Contributing
+## Tech Stack
 
-We welcome contributions from the community! Here's how you can help:
+**Frontend:** React 19, TypeScript, Tailwind CSS 4, Radix UI, Zustand
 
-### Ways to Contribute
+**Backend:** Tauri 2.5, Rust, macOS native APIs (NSPanel, Speech Recognition)
 
-- **Report bugs** - Open an issue with detailed reproduction steps
-- **Suggest features** - Share your ideas for improvements
-- **Improve documentation** - Help others understand the project
-- **Submit pull requests** - Fix bugs or add features
+**AI:** OpenAI, Google Cloud, AssemblyAI, ElevenLabs, Local Whisper (whisper.cpp)
 
-### Development Workflow
+## Contributing
 
-1. **Fork the repository**
-2. **Create a feature branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. **Make your changes**
-   - Write clear, concise commit messages
-   - Follow the existing code style
-   - Add tests if applicable
-4. **Run code quality checks**
-   ```bash
-   pnpm lint:fix
-   pnpm format:all
-   pnpm build
-   ```
-5. **Commit your changes**
-   ```bash
-   git commit -m "feat: add amazing feature"
-   ```
-6. **Push to your fork**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-7. **Open a Pull Request**
-   - Describe your changes in detail
-   - Link any related issues
-   - Wait for review and address feedback
+Contributions are welcome. Please open an issue first to discuss what you'd like to change.
 
-### Code Style
-
-- **TypeScript/React**: Follow ESLint and Prettier configurations
-- **Rust**: Use `cargo fmt` for formatting
-- **Commits**: Follow [Conventional Commits](https://www.conventionalcommits.org/)
-  - `feat:` - New features
-  - `fix:` - Bug fixes
-  - `docs:` - Documentation changes
-  - `refactor:` - Code refactoring
-  - `test:` - Adding tests
-  - `chore:` - Maintenance tasks
-
-### Getting Help
-
-- **Discussions** - Ask questions and share ideas
-- **Email** - Contact maintainers directly
-- **Wiki** - Check the project wiki for guides
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Make your changes
+4. Run `pnpm lint:fix && pnpm format:all && pnpm build`
+5. Commit with a descriptive message
+6. Open a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Built with [Tauri](https://tauri.app/) - The cross-platform app framework
-- UI components from [Radix UI](https://www.radix-ui.com/)
-- Icons from [Lucide](https://lucide.dev/)
-- Transcription powered by various AI providers
+MIT License. See [LICENSE](LICENSE) for details.
