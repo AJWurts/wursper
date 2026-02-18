@@ -1,8 +1,14 @@
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use tauri::command;
 
 use super::TranscriptionResponse;
+
+/// HTTP request timeout for transcription API calls
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+/// HTTP connection timeout
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Serialize, Deserialize)]
 struct OpenAIError {
@@ -16,20 +22,36 @@ struct OpenAIErrorDetail {
     error_type: String,
 }
 
+/// Get MIME type from filename extension
+fn get_mime_type(filename: &str) -> &'static str {
+    let ext = filename.rsplit('.').next().unwrap_or("wav").to_lowercase();
+    match ext.as_str() {
+        "mp3" => "audio/mpeg",
+        "mp4" | "m4a" => "audio/mp4",
+        "mpeg" | "mpga" => "audio/mpeg",
+        "ogg" => "audio/ogg",
+        "webm" => "audio/webm",
+        "flac" => "audio/flac",
+        _ => "audio/wav",
+    }
+}
+
 #[command]
 pub async fn transcribe_with_openai(
     audio_data: Vec<u8>,
     api_key: String,
     model: Option<String>,
     language: Option<String>,
-    temperature: Option<f64>,
+    filename: Option<String>,
 ) -> Result<TranscriptionResponse, String> {
     let model = model.unwrap_or_else(|| "whisper-1".to_string());
+    let filename = filename.unwrap_or_else(|| "audio.wav".to_string());
+    let mime_type = get_mime_type(&filename);
 
     // Create multipart form
     let audio_part = Part::bytes(audio_data)
-        .file_name("audio.wav")
-        .mime_str("audio/wav")
+        .file_name(filename)
+        .mime_str(mime_type)
         .map_err(|e| format!("Failed to create audio part: {}", e))?;
 
     let mut form = Form::new()
@@ -41,12 +63,13 @@ pub async fn transcribe_with_openai(
         form = form.text("language", lang);
     }
 
-    if let Some(temp) = temperature {
-        form = form.text("temperature", temp.to_string());
-    }
+    // Make request to OpenAI API with timeouts to prevent hangs
+    let client = reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    // Make request to OpenAI API
-    let client = reqwest::Client::new();
     let response = client
         .post("https://api.openai.com/v1/audio/transcriptions")
         .header("Authorization", format!("Bearer {}", api_key))

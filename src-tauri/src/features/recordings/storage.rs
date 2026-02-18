@@ -3,11 +3,16 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use tauri::{command, AppHandle, Manager};
+use ts_rs::TS;
 
-use super::metadata::RecordingMetadata;
+use super::metadata::{RecordingMetadata, SourceType};
 
 /// Simplified transcription record for frontend
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(
+    export,
+    export_to = "../../src/features/transcriptions/types/generated/"
+)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptionRecord {
     pub id: String,
@@ -18,6 +23,9 @@ pub struct TranscriptionRecord {
     pub model_id: String,
     pub provider: String,
     pub has_audio: bool,
+    #[serde(default)]
+    pub source_type: SourceType,
+    pub original_filename: Option<String>,
 }
 
 /// Get the recordings directory path
@@ -145,6 +153,8 @@ pub async fn get_all_transcriptions(app: AppHandle) -> Result<Vec<TranscriptionR
                     model_id: metadata.model_key.clone(),
                     provider: metadata.provider.clone(),
                     has_audio: metadata.has_audio,
+                    source_type: metadata.source_type.clone(),
+                    original_filename: metadata.original_filename.clone(),
                 });
             }
             Err(e) => {

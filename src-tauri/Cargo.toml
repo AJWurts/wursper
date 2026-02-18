@@ -44,7 +44,10 @@ reqwest = { version = "0.13.1", features = ["multipart", "json", "stream"] }
 base64 = "0.22.1"
 uuid = { version = "1.19.0", features = ["v4"] }
 futures-util = "0.3.31"
-tokio = { version = "1.48.0", features = ["fs", "process", "time"] }
+tokio = { version = "1.48.0", features = ["fs", "process", "time", "sync"] }
+tokio-util = "0.7"
+parking_lot = "0.12"
+ringbuf = "0.4"
 bytes = "1.11.0"
 whisper-rs = "0.15.1"
 hound = "3.5"

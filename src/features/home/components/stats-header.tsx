@@ -15,7 +15,7 @@ export function StatsHeader({
   timeSavedMinutes = 0,
 }: StatsHeaderProps) {
   return (
-    <div className="mb-6">
+    <div>
       <div className="grid grid-cols-4 gap-2.5">
         <KPICard
           label="Today"

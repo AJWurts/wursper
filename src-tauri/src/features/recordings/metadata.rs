@@ -53,6 +53,31 @@ pub struct RecordingMetadata {
     // Audio file status
     #[serde(default)]
     pub has_audio: bool, // Whether audio file was saved (based on saveAudioRecordings setting)
+
+    // Source type - distinguishes between recorded and uploaded audio
+    #[serde(default = "default_source_type")]
+    pub source_type: SourceType,
+
+    // Original filename (for uploaded files)
+    #[serde(default)]
+    pub original_filename: Option<String>,
+}
+
+fn default_source_type() -> SourceType {
+    SourceType::Recording
+}
+
+/// Source type for transcriptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[ts(
+    export,
+    export_to = "../../src/features/transcriptions/types/generated/"
+)]
+#[serde(rename_all = "lowercase")]
+pub enum SourceType {
+    #[default]
+    Recording, // Voice recording from microphone
+    Upload, // Uploaded audio file
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -127,6 +152,59 @@ impl RecordingMetadata {
         prompt_context: PromptContext,
         has_audio: bool,
     ) -> Self {
+        Self::with_source(
+            raw_result,
+            final_result,
+            post_processed_result,
+            timestamp,
+            duration,
+            processing_time,
+            model_key,
+            model_name,
+            provider,
+            post_processing_model_id,
+            post_processing_model_name,
+            post_processing_provider,
+            language,
+            recording_device,
+            focused_app_name,
+            focused_app_category,
+            post_processing_enabled,
+            style_applied,
+            style_category,
+            prompt_context,
+            has_audio,
+            SourceType::Recording,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_source(
+        raw_result: String,
+        final_result: String,
+        post_processed_result: Option<String>,
+        timestamp: i64,
+        duration: f64,
+        processing_time: u64,
+        model_key: String,
+        model_name: String,
+        provider: String,
+        post_processing_model_id: Option<String>,
+        post_processing_model_name: Option<String>,
+        post_processing_provider: Option<String>,
+        language: String,
+        recording_device: String,
+        focused_app_name: String,
+        focused_app_category: String,
+        post_processing_enabled: bool,
+        style_applied: Option<String>,
+        style_category: Option<String>,
+        prompt_context: PromptContext,
+        has_audio: bool,
+        source_type: SourceType,
+        original_filename: Option<String>,
+    ) -> Self {
         use chrono::prelude::*;
 
         // Convert timestamp to ISO 8601
@@ -158,6 +236,8 @@ impl RecordingMetadata {
             prompt_context,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             has_audio,
+            source_type,
+            original_filename,
         }
     }
 }
