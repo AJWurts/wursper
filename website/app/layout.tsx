@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next"
 import type { Metadata } from 'next'
 import { DM_Sans, Instrument_Serif } from 'next/font/google'
 import './globals.css'
@@ -70,6 +71,7 @@ export default function RootLayout({
         <div className="noise-overlay" aria-hidden="true" />
         {children}
       </body>
+      <Analytics />
     </html>
   )
 }
