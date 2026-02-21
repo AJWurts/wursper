@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { Store, load } from '@tauri-apps/plugin-store'
 import { create } from 'zustand'
 
-import { initAnalytics, setAnalyticsEnabled, analytics } from '@/lib/analytics'
+import { storeAnalytics } from '@/lib/analytics'
 
 import { AiProcessingSettings, defaultSettings, type Settings } from './schema'
 
@@ -25,6 +25,22 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     try {
       const store = await getTauriStore()
       const storedSettings = await store.get<Settings>('settings')
+
+      // Check if analytics migration has been done (v1 = enable analytics by default)
+      const analyticsMigrationDone = await store.get<boolean>(
+        'analytics_v1_migrated'
+      )
+
+      // Determine analytics value:
+      // - If migration not done yet (existing user updating), enable analytics
+      // - If migration done, respect stored value
+      // - If new user (no stored settings), default to true
+      let analyticsEnabled = true
+      if (analyticsMigrationDone) {
+        // Migration already done, respect user's choice
+        analyticsEnabled = storedSettings?.privacy?.analytics ?? true
+      }
+      // If migration not done, we force enable analytics (analyticsEnabled stays true)
 
       const settings: Settings = {
         onboarding: {
@@ -62,8 +78,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
             storedSettings?.system?.playSoundOnRecording ?? true,
         },
         privacy: {
-          analytics: storedSettings?.privacy?.analytics ?? false,
-          errorLogging: storedSettings?.privacy?.errorLogging ?? true,
+          analytics: analyticsEnabled,
         },
         aiProcessing: {
           enabled: storedSettings?.aiProcessing?.enabled ?? false,
@@ -72,10 +87,15 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         },
       }
 
-      set({ settings, initialized: true })
+      // Mark analytics migration as done and save settings
+      if (!analyticsMigrationDone) {
+        await store.set('analytics_v1_migrated', true)
+        await store.set('settings', settings)
+        await store.save()
+      }
 
-      // Initialize analytics based on settings
-      initAnalytics(settings.privacy.analytics)
+      set({ settings, initialized: true })
+      // Analytics initialization is handled by AnalyticsProvider
     } catch (error) {
       console.error('Error initializing settings store:', error)
       set({ settings: defaultSettings, initialized: true })
@@ -113,6 +133,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
       // Update the global shortcut registration
       await invoke('update_voice_input_shortcut', { shortcutStr: shortcut })
+      storeAnalytics.trackSettingChange('voiceInputShortcut', shortcut)
     } catch (error) {
       console.error('Error saving voice input shortcut:', error)
     }
@@ -134,6 +155,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
       // Rebuild tray menu to reflect the microphone change
       await invoke('rebuild_tray_menu_command')
+      storeAnalytics.trackSettingChange(
+        'microphoneDevice',
+        deviceId ? 'changed' : 'default'
+      )
     } catch (error) {
       console.error('Error saving microphone device:', error)
     }
@@ -152,6 +177,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
+      storeAnalytics.trackSettingChange('transcriptionLanguage', language)
     } catch (error) {
       console.error('Error saving transcription language:', error)
     }
@@ -173,6 +199,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
       // Update the global shortcut registration
       await invoke('update_paste_shortcut', { shortcutStr: shortcut })
+      storeAnalytics.trackSettingChange('pasteShortcut', shortcut)
     } catch (error) {
       console.error('Error saving paste shortcut:', error)
     }
@@ -198,6 +225,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       } else {
         await invoke('disable_global_shortcuts')
       }
+      storeAnalytics.trackSettingChange('globalShortcutsEnabled', enabled)
     } catch (error) {
       console.error('Error toggling global shortcuts:', error)
     }
@@ -219,6 +247,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
       // Update dock visibility
       await invoke('set_show_in_dock', { show: enabled })
+      storeAnalytics.trackSettingChange('showInDock', enabled)
     } catch (error) {
       console.error('Error toggling show in dock:', error)
     }
@@ -237,6 +266,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
+      storeAnalytics.trackSettingChange('saveAudioRecordings', enabled)
     } catch (error) {
       console.error('Error toggling save audio recordings:', error)
     }
@@ -255,6 +285,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
+      storeAnalytics.trackSettingChange('autoPaste', enabled)
     } catch (error) {
       console.error('Error toggling auto-paste:', error)
     }
@@ -273,6 +304,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
+      storeAnalytics.trackSettingChange('autoCopyToClipboard', enabled)
     } catch (error) {
       console.error('Error toggling auto-copy to clipboard:', error)
     }
@@ -291,30 +323,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
-
-      // Update analytics state
-      setAnalyticsEnabled(enabled)
-      analytics.trackSettingChange('analytics', enabled)
+      // AnalyticsProvider listens to settings and handles opt-in/opt-out
+      storeAnalytics.trackSettingChange('analytics', enabled)
     } catch (error) {
       console.error('Error toggling analytics:', error)
-    }
-  },
-
-  setErrorLogging: async (enabled: boolean) => {
-    try {
-      const store = await getTauriStore()
-      const newSettings = {
-        ...get().settings,
-        privacy: {
-          ...get().settings.privacy,
-          errorLogging: enabled,
-        },
-      }
-      await store.set('settings', newSettings)
-      await store.save()
-      set({ settings: newSettings })
-    } catch (error) {
-      console.error('Error toggling error logging:', error)
     }
   },
 
@@ -324,6 +336,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', defaultSettings)
       await store.save()
       set({ settings: defaultSettings })
+      storeAnalytics.trackSettingChange('resetSettings', true)
     } catch (error) {
       console.error('Error resetting settings:', error)
     }
@@ -342,6 +355,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
+      storeAnalytics.trackSettingChange('aiProcessingEnabled', enabled)
     } catch (error) {
       console.error('Error toggling AI processing:', error)
     }
@@ -360,6 +374,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
+      storeAnalytics.trackModelAction('selected', {
+        modelId: modelId || 'none',
+        modelType: 'stt',
+      })
     } catch (error) {
       console.error('Error setting speech-to-text model:', error)
     }
@@ -395,6 +413,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         (verifyStore as unknown as { aiProcessing: AiProcessingSettings })
           ?.aiProcessing
       )
+      storeAnalytics.trackModelAction('selected', {
+        modelId: modelId || 'none',
+        modelType: 'post-processing',
+      })
     } catch (error) {
       console.error('❌ Error setting post-processing model:', error)
     }
@@ -422,6 +444,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       } else {
         await invoke('unregister_ptt_shortcut')
       }
+      storeAnalytics.trackSettingChange('enablePushToTalk', enabled)
     } catch (error) {
       console.error('Error toggling push-to-talk:', error)
     }
@@ -445,6 +468,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       if (newSettings.voiceInput.enablePushToTalk) {
         await invoke('update_ptt_shortcut', { shortcutStr: shortcut })
       }
+      storeAnalytics.trackSettingChange('pushToTalkShortcut', shortcut)
     } catch (error) {
       console.error('Error saving push-to-talk shortcut:', error)
     }

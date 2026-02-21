@@ -2,6 +2,8 @@ import { Store, load } from '@tauri-apps/plugin-store'
 import { v4 as uuidv4 } from 'uuid'
 import { create } from 'zustand'
 
+import { storeAnalytics } from '@/lib/analytics'
+
 import type { VocabularyWord } from './schema'
 import type { VocabularyStore } from './types'
 
@@ -59,8 +61,12 @@ export const useVocabularyStore = create<VocabularyStore>((set, get) => ({
       await store.set('words', newWords)
       await store.save()
       set({ words: newWords })
+      storeAnalytics.trackFeatureUsed('vocabulary_word_added', {
+        wordId: newWord.id,
+      })
     } catch (error) {
       console.error('Error adding word:', error)
+      storeAnalytics.trackError(error as Error, { context: 'vocabulary_add' })
       throw error
     }
   },
@@ -94,8 +100,12 @@ export const useVocabularyStore = create<VocabularyStore>((set, get) => ({
       await store.set('words', updatedWords)
       await store.save()
       set({ words: updatedWords })
+      storeAnalytics.trackFeatureUsed('vocabulary_word_updated', { wordId: id })
     } catch (error) {
       console.error('Error updating word:', error)
+      storeAnalytics.trackError(error as Error, {
+        context: 'vocabulary_update',
+      })
       throw error
     }
   },
@@ -114,8 +124,12 @@ export const useVocabularyStore = create<VocabularyStore>((set, get) => ({
       await store.set('words', newWords)
       await store.save()
       set({ words: newWords })
+      storeAnalytics.trackFeatureUsed('vocabulary_word_deleted', { wordId: id })
     } catch (error) {
       console.error('Error deleting word:', error)
+      storeAnalytics.trackError(error as Error, {
+        context: 'vocabulary_delete',
+      })
       throw error
     }
   },

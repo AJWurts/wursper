@@ -15,7 +15,6 @@ export interface SettingsStore {
   setShowInDock: (enabled: boolean) => Promise<void>
   setSaveAudioRecordings: (enabled: boolean) => Promise<void>
   setAnalytics: (enabled: boolean) => Promise<void>
-  setErrorLogging: (enabled: boolean) => Promise<void>
   resetSettings: () => Promise<void>
   setAiProcessingEnabled: (enabled: boolean) => Promise<void>
   setSpeechToTextModel: (modelId: string | null) => Promise<void>

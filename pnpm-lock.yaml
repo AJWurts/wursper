@@ -23,6 +23,9 @@ importers:
       '@google-cloud/speech':
         specifier: ^7.2.1
         version: 7.2.1
+      '@posthog/react':
+        specifier: ^1.8.0
+        version: 1.8.0(@types/react@19.2.7)(posthog-js@1.347.2)(react@19.2.3)
       '@radix-ui/react-avatar':
         specifier: ^1.1.11
         version: 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -704,6 +707,16 @@ packages:
 
   '@posthog/core@1.22.0':
     resolution: {integrity: sha512-WkmOnq95aAOu6yk6r5LWr5cfXsQdpVbWDCwOxQwxSne8YV6GuZET1ziO5toSQXgrgbdcjrSz2/GopAfiL6iiAA==}
+
+  '@posthog/react@1.8.0':
+    resolution: {integrity: sha512-UEX3BAIXMrzN7r/JoVotMY9BSTfJ1umiQqfsU30X1OZAW59cO5cPf50YDj4XNhHTCZpiLqenmvJdtJLsx5Pn4Q==}
+    peerDependencies:
+      '@types/react': '>=16.8.0'
+      posthog-js: '>=1.257.2'
+      react: '>=16.8.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   '@posthog/types@1.347.2':
     resolution: {integrity: sha512-aT+r/7jXOzPmUHO6sutoWzczPcYIZyhmWt1f1OvY4zKC7Pwp/ZsJWKFTxjV02p0PZz96AE83eLTe7w7b6tjhIw==}
@@ -3968,6 +3981,13 @@ snapshots:
   '@posthog/core@1.22.0':
     dependencies:
       cross-spawn: 7.0.6
+
+  '@posthog/react@1.8.0(@types/react@19.2.7)(posthog-js@1.347.2)(react@19.2.3)':
+    dependencies:
+      posthog-js: 1.347.2
+      react: 19.2.3
+    optionalDependencies:
+      '@types/react': 19.2.7
 
   '@posthog/types@1.347.2': {}
 

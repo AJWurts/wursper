@@ -15,11 +15,9 @@ import { SettingsPanel, SettingItem, SettingsSection } from './settings-panel'
 import { useSettingsStore } from '../../store'
 
 export function PrivacyPanel() {
-  const { settings, setAnalytics, setErrorLogging, resetSettings } =
-    useSettingsStore()
+  const { settings, setAnalytics, resetSettings } = useSettingsStore()
 
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
-  const [errorLoggingLoading, setErrorLoggingLoading] = useState(false)
   const [exportLoading, setExportLoading] = useState(false)
   const [importLoading, setImportLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -32,17 +30,6 @@ export function PrivacyPanel() {
       console.error('Failed to toggle analytics:', error)
     } finally {
       setAnalyticsLoading(false)
-    }
-  }
-
-  const handleErrorLoggingToggle = async (checked: boolean) => {
-    setErrorLoggingLoading(true)
-    try {
-      await setErrorLogging(checked)
-    } catch (error) {
-      console.error('Failed to toggle error logging:', error)
-    } finally {
-      setErrorLoggingLoading(false)
     }
   }
 
@@ -186,24 +173,12 @@ export function PrivacyPanel() {
       <SettingsSection title="Privacy">
         <SettingItem
           title="Analytics"
-          description="Help improve Dicta by sharing anonymous usage data"
+          description="Help improve Dicta by sharing anonymous usage data and error reports"
           action={
             <Switch
               checked={settings.privacy.analytics}
               onCheckedChange={handleAnalyticsToggle}
               disabled={analyticsLoading}
-            />
-          }
-        />
-
-        <SettingItem
-          title="Error logging"
-          description="Send error reports to help us fix issues"
-          action={
-            <Switch
-              checked={settings.privacy.errorLogging}
-              onCheckedChange={handleErrorLoggingToggle}
-              disabled={errorLoggingLoading}
             />
           }
         />

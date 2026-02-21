@@ -2,6 +2,8 @@ import { Store, load } from '@tauri-apps/plugin-store'
 import { v4 as uuidv4 } from 'uuid'
 import { create } from 'zustand'
 
+import { storeAnalytics } from '@/lib/analytics'
+
 import type { Snippet, SnippetsStore } from './types'
 
 let tauriStore: Store | null = null
@@ -49,8 +51,12 @@ export const useSnippetsStore = create<SnippetsStore>((set, get) => ({
       await store.set('snippets', newSnippets)
       await store.save()
       set({ snippets: newSnippets })
+      storeAnalytics.trackFeatureUsed('snippet_created', {
+        snippetId: newSnippet.id,
+      })
     } catch (error) {
       console.error('Error creating snippet:', error)
+      storeAnalytics.trackError(error as Error, { context: 'snippet_create' })
       throw error
     }
   },
@@ -75,8 +81,10 @@ export const useSnippetsStore = create<SnippetsStore>((set, get) => ({
       await store.set('snippets', updatedSnippets)
       await store.save()
       set({ snippets: updatedSnippets })
+      storeAnalytics.trackFeatureUsed('snippet_updated', { snippetId: id })
     } catch (error) {
       console.error('Error updating snippet:', error)
+      storeAnalytics.trackError(error as Error, { context: 'snippet_update' })
       throw error
     }
   },
@@ -95,8 +103,10 @@ export const useSnippetsStore = create<SnippetsStore>((set, get) => ({
       await store.set('snippets', newSnippets)
       await store.save()
       set({ snippets: newSnippets })
+      storeAnalytics.trackFeatureUsed('snippet_deleted', { snippetId: id })
     } catch (error) {
       console.error('Error deleting snippet:', error)
+      storeAnalytics.trackError(error as Error, { context: 'snippet_delete' })
       throw error
     }
   },

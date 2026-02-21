@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useTranscriptionsStore } from '@/features/transcriptions'
+import { useAnalytics } from '@/lib/analytics'
 import { cn } from '@/lib/cn'
 
 import type { UploadTranscriptionResponse } from '@/features/transcriptions/types/generated'
@@ -31,6 +32,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { trackFeatureUsed, trackError } = useAnalytics()
 
   const resetState = useCallback(() => {
     setFile(null)
@@ -128,9 +130,16 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
       if (response.success) {
         // Refresh transcriptions list
         await initialize()
+        trackFeatureUsed('audio_upload', {
+          file_size: file.size,
+          file_type: file.name.split('.').pop()?.toLowerCase(),
+        })
         handleOpenChange(false)
       } else {
         setError(response.error || 'Failed to transcribe audio file')
+        trackError(response.error || 'Failed to transcribe audio file', {
+          context: 'audio_upload',
+        })
       }
     } catch (err) {
       console.error('Upload error:', err)
@@ -142,6 +151,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
             ? err.message
             : 'An unexpected error occurred'
       setError(errorMessage)
+      trackError(errorMessage, { context: 'audio_upload' })
     } finally {
       setIsUploading(false)
     }

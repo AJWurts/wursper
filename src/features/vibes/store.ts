@@ -2,6 +2,8 @@ import { Store, load } from '@tauri-apps/plugin-store'
 import { v4 as uuidv4 } from 'uuid'
 import { create } from 'zustand'
 
+import { storeAnalytics } from '@/lib/analytics'
+
 import { defaultVibes, type VibesStore } from './types'
 
 import type { Vibe, VibeCategory } from './schema'
@@ -96,8 +98,13 @@ export const useVibesStore = create<VibesStore>((set, get) => ({
       await store.set('vibes', newVibes)
       await store.save()
       set({ vibes: newVibes })
+      storeAnalytics.trackFeatureUsed('vibe_created', {
+        category,
+        vibeId: newVibe.id,
+      })
     } catch (error) {
       console.error('Error creating vibe:', error)
+      storeAnalytics.trackError(error as Error, { context: 'vibe_create' })
       throw error
     }
   },
@@ -135,8 +142,10 @@ export const useVibesStore = create<VibesStore>((set, get) => ({
       await store.set('vibes', updatedVibes)
       await store.save()
       set({ vibes: updatedVibes })
+      storeAnalytics.trackFeatureUsed('vibe_updated', { vibeId: id })
     } catch (error) {
       console.error('Error updating vibe:', error)
+      storeAnalytics.trackError(error as Error, { context: 'vibe_update' })
       throw error
     }
   },
@@ -175,8 +184,13 @@ export const useVibesStore = create<VibesStore>((set, get) => ({
       }
 
       set({ vibes: newVibes })
+      storeAnalytics.trackFeatureUsed('vibe_deleted', {
+        vibeId: id,
+        category: vibe.category,
+      })
     } catch (error) {
       console.error('Error deleting vibe:', error)
+      storeAnalytics.trackError(error as Error, { context: 'vibe_delete' })
       throw error
     }
   },
@@ -194,8 +208,10 @@ export const useVibesStore = create<VibesStore>((set, get) => ({
       await store.set('selectedVibes', newSelectedVibes)
       await store.save()
       set({ selectedVibes: newSelectedVibes })
+      storeAnalytics.trackFeatureUsed('vibe_selected', { category, vibeId })
     } catch (error) {
       console.error('Error selecting vibe:', error)
+      storeAnalytics.trackError(error as Error, { context: 'vibe_select' })
       throw error
     }
   },

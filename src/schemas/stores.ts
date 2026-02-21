@@ -25,7 +25,6 @@ export const settingsSchema = z.object({
   }),
   privacy: z.object({
     analytics: z.boolean(),
-    errorLogging: z.boolean(),
   }),
   aiProcessing: z.object({
     enabled: z.boolean(),

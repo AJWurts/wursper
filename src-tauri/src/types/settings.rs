@@ -56,7 +56,6 @@ pub struct SystemSettings {
 #[serde(rename_all = "camelCase")]
 pub struct PrivacySettings {
     pub analytics: bool,
-    pub error_logging: bool,
 }
 
 /// AI Processing settings
@@ -107,10 +106,7 @@ impl Default for Settings {
                 save_audio_recordings: false,
                 play_sound_on_recording: true,
             },
-            privacy: PrivacySettings {
-                analytics: false,
-                error_logging: true,
-            },
+            privacy: PrivacySettings { analytics: true },
             ai_processing: AiProcessingSettings {
                 enabled: false,
                 post_processing_model_id: None,

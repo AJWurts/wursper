@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { useAnalytics } from '@/lib/analytics'
 
 import type { RecordingResponse } from '@/features/voice-input/types/generated/RecordingResponse'
 import type { RecordingState } from '@/features/voice-input/types/generated/RecordingState'
@@ -24,6 +26,8 @@ export function useAudioRecording(): UseAudioRecordingReturn {
   const [state, setState] = useState<RecordingState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [filePath, setFilePath] = useState<string | null>(null)
+  const recordingStartTime = useRef<number | null>(null)
+  const { capture, events, trackError } = useAnalytics()
 
   // Listen for state changes from backend
   useEffect(() => {
@@ -70,15 +74,21 @@ export function useAudioRecording(): UseAudioRecordingReturn {
         setState(response.state)
         setFilePath(response.filePath || null)
         setError(null)
+        recordingStartTime.current = Date.now()
+        capture(events.RECORDING_STARTED)
       } else {
         setError(response.error || 'Failed to start recording')
+        trackError(response.error || 'Failed to start recording', {
+          context: 'recording_start',
+        })
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       setError(errorMsg)
       console.error('Failed to start recording:', err)
+      trackError(errorMsg, { context: 'recording_start' })
     }
-  }, [])
+  }, [capture, events, trackError])
 
   const stopRecording = useCallback(async () => {
     try {
@@ -86,15 +96,24 @@ export function useAudioRecording(): UseAudioRecordingReturn {
       if (response.success) {
         setState(response.state)
         setError(null)
+        const duration = recordingStartTime.current
+          ? (Date.now() - recordingStartTime.current) / 1000
+          : undefined
+        capture(events.RECORDING_COMPLETED, { duration_seconds: duration })
+        recordingStartTime.current = null
       } else {
         setError(response.error || 'Failed to stop recording')
+        trackError(response.error || 'Failed to stop recording', {
+          context: 'recording_stop',
+        })
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       setError(errorMsg)
       console.error('Failed to stop recording:', err)
+      trackError(errorMsg, { context: 'recording_stop' })
     }
-  }, [])
+  }, [capture, events, trackError])
 
   const cancelRecording = useCallback(async () => {
     try {
@@ -103,15 +122,21 @@ export function useAudioRecording(): UseAudioRecordingReturn {
         setState(response.state)
         setFilePath(null)
         setError(null)
+        capture(events.RECORDING_CANCELLED)
+        recordingStartTime.current = null
       } else {
         setError(response.error || 'Failed to cancel recording')
+        trackError(response.error || 'Failed to cancel recording', {
+          context: 'recording_cancel',
+        })
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       setError(errorMsg)
       console.error('Failed to cancel recording:', err)
+      trackError(errorMsg, { context: 'recording_cancel' })
     }
-  }, [])
+  }, [capture, events, trackError])
 
   const isRecording = state === 'recording'
   const isActive = state !== 'idle' && state !== 'error'

@@ -38,8 +38,7 @@ export const defaultSettings: Settings = {
     playSoundOnRecording: true,
   },
   privacy: {
-    analytics: false,
-    errorLogging: true,
+    analytics: true,
   },
   aiProcessing: {
     enabled: false,

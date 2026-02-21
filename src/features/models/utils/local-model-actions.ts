@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core'
 import { toast } from 'sonner'
 
+import { storeAnalytics } from '@/lib/analytics'
+
 import type { ModelStatus } from '../types'
 
 /**
@@ -38,6 +40,13 @@ export async function startLocalModel(
       description: 'Model is now loaded into memory and ready to use.',
       duration: 3000,
     })
+
+    // Track model start
+    storeAnalytics.trackModelAction('started', {
+      modelId,
+      modelType: engineType === 'llama' ? 'post-processing' : 'stt',
+      modelProvider: engineType,
+    })
   } catch (error) {
     const errorMsg = String(error)
 
@@ -71,6 +80,13 @@ export async function startLocalModel(
         duration: 8000,
       })
     }
+
+    // Track error
+    storeAnalytics.trackError(errorMsg, {
+      context: 'model_start',
+      modelId,
+      engineType,
+    })
     throw error
   }
 }
@@ -83,6 +99,14 @@ export async function startLocalModel(
  */
 export async function stopLocalModel(modelId?: string): Promise<void> {
   await invoke('stop_local_model', { modelId: modelId || null })
+
+  // Track model stop
+  if (modelId) {
+    storeAnalytics.trackModelAction('stopped', {
+      modelId,
+      modelType: modelId.startsWith('llm-') ? 'post-processing' : 'stt',
+    })
+  }
 }
 
 /**
