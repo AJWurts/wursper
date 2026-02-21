@@ -1,3 +1,13 @@
+## [0.0.8](https://github.com/nitintf/dicta/compare/v0.0.7...v0.0.8) (2026-02-21)
+
+
+### Features
+
+* analytics init and store update for analytics settings ([0f69c29](https://github.com/nitintf/dicta/commit/0f69c29487931cd8c89eb753a12eb1949472b493))
+* **website:** added vercel analytics to landing page ([9c1164c](https://github.com/nitintf/dicta/commit/9c1164c80ec982c49f4b8aafa978352e140958d2))
+
+
+
 ## [0.0.7](https://github.com/nitintf/dicta/compare/v0.0.6...v0.0.7) (2026-02-18)
 
 
