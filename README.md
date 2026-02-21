@@ -6,9 +6,10 @@
 Voice-to-text for macOS. Press a shortcut, speak, and your words appear as text.
 
 [![CI](https://github.com/nitintf/dicta/actions/workflows/ci.yml/badge.svg)](https://github.com/nitintf/dicta/actions/workflows/ci.yml)
-[![Release](https://github.com/nitintf/dicta/actions/workflows/release.yml/badge.svg)](https://github.com/nitintf/dicta/actions/workflows/release.yml)
-[![Version](https://img.shields.io/badge/version-0.0.6-blue.svg)](https://github.com/nitintf/dicta/releases)
+[![Latest Release](https://img.shields.io/github/v/release/nitintf/dicta?label=release)](https://github.com/nitintf/dicta/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/nitintf/dicta/total)](https://github.com/nitintf/dicta/releases)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos)
+[![License](https://img.shields.io/github/license/nitintf/dicta)](LICENSE)
 
 </div>
 
