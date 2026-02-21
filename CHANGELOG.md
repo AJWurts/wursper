@@ -1,3 +1,12 @@
+## [0.0.9](https://github.com/nitintf/dicta/compare/v0.0.8...v0.0.9) (2026-02-21)
+
+
+### Bug Fixes
+
+* crash prevention and stability improvements ([a52e802](https://github.com/nitintf/dicta/commit/a52e802daa03274d61386671a159b226a6457dec))
+
+
+
 ## [0.0.8](https://github.com/nitintf/dicta/compare/v0.0.7...v0.0.8) (2026-02-21)
 
 
