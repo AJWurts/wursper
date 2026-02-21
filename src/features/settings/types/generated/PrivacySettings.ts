@@ -3,4 +3,4 @@
 /**
  * Privacy settings
  */
-export type PrivacySettings = { analytics: boolean };
+export type PrivacySettings = { analytics: boolean, };

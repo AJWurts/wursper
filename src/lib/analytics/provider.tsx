@@ -5,10 +5,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useSettingsStore } from '@/features/settings'
 
 import { AnalyticsContext } from './context'
+import { initAnalytics } from './init'
 
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY || ''
-const POSTHOG_HOST =
-  import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com'
 const IS_DEVELOPMENT = import.meta.env.DEV
 
 interface AnalyticsProviderProps {
@@ -38,16 +37,12 @@ function AnalyticsProviderInner({ children }: AnalyticsProviderProps) {
     }
 
     if (!isInitialized && analyticsEnabled) {
-      posthog.init(POSTHOG_KEY, {
-        api_host: POSTHOG_HOST,
-        person_profiles: 'identified_only',
+      initAnalytics({
         autocapture: true,
-        capture_pageview: true,
-        capture_pageleave: true,
-        disable_session_recording: false,
-        persistence: 'localStorage',
-        respect_dnt: true,
-        loaded: () => {
+        capturePageview: true,
+        capturePageleave: true,
+        sessionRecording: true,
+        onLoaded: () => {
           console.log('[Analytics] PostHog initialized successfully')
           setIsInitialized(true)
         },

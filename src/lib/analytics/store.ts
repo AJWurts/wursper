@@ -15,9 +15,12 @@ function capture(event: string, properties?: Record<string, unknown>) {
 }
 
 /**
- * Analytics helper for use in Zustand stores (non-React code)
+ * Analytics helper for use in Zustand stores and non-React code
+ * (e.g., voice input window which doesn't have AnalyticsProvider)
  */
 export const storeAnalytics = {
+  capture,
+
   trackSettingChange: (setting: string, value: unknown) => {
     capture(AnalyticsEvents.SETTING_CHANGED, {
       setting_name: setting,
