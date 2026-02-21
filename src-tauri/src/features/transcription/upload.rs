@@ -73,6 +73,14 @@ pub async fn transcribe_uploaded_file(
     // Get selected transcription model
     let selected_model = get_selected_model(&app)?;
 
+    // Get settings early for transcription options
+    let settings = get_settings(&app)?;
+    let translate_to_english = settings
+        .get("transcription")
+        .and_then(|t| t.get("translateToEnglish"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     // Create recording folder
     let recording_folder = create_recording_folder(&app, timestamp)?;
 
@@ -88,6 +96,7 @@ pub async fn transcribe_uploaded_file(
         request.audio_data.clone(),
         &selected_model,
         request.language.clone(),
+        translate_to_english,
         Some(request.filename.clone()),
         local_model_state,
     )
@@ -110,8 +119,7 @@ pub async fn transcribe_uploaded_file(
         });
     }
 
-    // Get settings for AI post-processing
-    let settings = get_settings(&app)?;
+    // Check AI post-processing settings
     let ai_processing_enabled = settings
         .get("aiProcessing")
         .and_then(|a| a.get("enabled"))
@@ -184,6 +192,7 @@ pub async fn transcribe_uploaded_file(
         post_processing_model_name,
         post_processing_provider,
         request.language.unwrap_or_else(|| "en".to_string()),
+        translate_to_english,
         "File Upload".to_string(), // recording_device
         "File Upload".to_string(), // focused_app_name
         "other".to_string(),       // focused_app_category
@@ -317,6 +326,7 @@ async fn transcribe_with_provider(
     audio_data: Vec<u8>,
     model: &SelectedModel,
     language: Option<String>,
+    translate: bool,
     filename: Option<String>,
     local_model_state: State<'_, Arc<Mutex<LocalModelManager>>>,
 ) -> Result<String, String> {
@@ -359,6 +369,7 @@ async fn transcribe_with_provider(
                 audio_data,
                 Some(model.id.clone()),
                 language,
+                translate,
                 local_model_state,
             )
             .await?
@@ -383,6 +394,7 @@ async fn transcribe_with_provider(
                 model.path.clone(),
                 Some(model.id.clone()),
                 language,
+                translate,
                 local_model_state,
             )
             .await?
@@ -394,6 +406,7 @@ async fn transcribe_with_provider(
                 model.path.clone(),
                 Some(model.id.clone()),
                 language,
+                translate,
                 local_model_state,
             )
             .await?
@@ -405,6 +418,7 @@ async fn transcribe_with_provider(
                 model.path.clone(),
                 Some(model.id.clone()),
                 language,
+                translate,
                 local_model_state,
             )
             .await?

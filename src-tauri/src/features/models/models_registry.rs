@@ -47,6 +47,18 @@ pub enum ModelProvider {
     LocalLLM,
 }
 
+/// Language support for speech-to-text models
+/// Models with `.en` suffix are English-only, others support 99+ languages
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/features/models/types/generated/")]
+#[serde(rename_all = "snake_case")]
+pub enum LanguageSupport {
+    /// Supports 99+ languages (standard Whisper models)
+    Multilingual,
+    /// English only (models with .en suffix)
+    EnglishOnly,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/features/models/types/generated/")]
 #[serde(rename_all = "camelCase")]
@@ -73,6 +85,8 @@ pub struct ModelDefinition {
     /// Whether this model is recommended
     #[serde(default)]
     pub is_recommended: bool,
+    /// Language support for STT models (None for post-processing models)
+    pub language_support: Option<LanguageSupport>,
 }
 
 // Speech-to-Text cloud models
@@ -350,6 +364,8 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             download_url: None,
             filename: None,
             is_recommended: false,
+            // All cloud STT models support multiple languages
+            language_support: Some(LanguageSupport::Multilingual),
         });
     }
 
@@ -375,6 +391,8 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             download_url: None,
             filename: None,
             is_recommended: false,
+            // Post-processing models don't have language support (not STT)
+            language_support: None,
         });
     }
 
@@ -420,6 +438,13 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
         // Mark distil-large-v3 as recommended for STT
         let is_recommended = *name == "distil-large-v3";
 
+        // Models with .en suffix are English-only, others support 99+ languages
+        let language_support = if name.ends_with(".en") {
+            LanguageSupport::EnglishOnly
+        } else {
+            LanguageSupport::Multilingual
+        };
+
         models.push(ModelDefinition {
             id: format!("whisper-{}", name),
             name: model_name.clone(),
@@ -440,6 +465,7 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             download_url: Some(url.to_string()),
             filename: Some(filename),
             is_recommended,
+            language_support: Some(language_support),
         });
     }
 
@@ -610,6 +636,8 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             download_url: Some(url.to_string()),
             filename: Some(filename),
             is_recommended,
+            // Post-processing models don't have language support (not STT)
+            language_support: None,
         });
     }
 

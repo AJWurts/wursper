@@ -107,6 +107,24 @@ export const useTranscriptionsStore = create<TranscriptionsStore>(
         typingTimeMinutes - speakingTimeMinutes
       )
 
+      // Language statistics
+      const languageCounts: Record<string, number> = {}
+      let translatedCount = 0
+
+      for (const t of transcriptions) {
+        const lang = t.language || 'en'
+        languageCounts[lang] = (languageCounts[lang] || 0) + 1
+        if (t.translatedToEnglish) {
+          translatedCount++
+        }
+      }
+
+      // Sort languages by count and get top 5
+      const topLanguages = Object.entries(languageCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([code, count]) => ({ code, count }))
+
       return {
         totalTranscriptions: transcriptions.length,
         totalWords,
@@ -119,6 +137,11 @@ export const useTranscriptionsStore = create<TranscriptionsStore>(
           transcriptions.length > 0
             ? Math.round(totalWords / transcriptions.length)
             : 0,
+        languageStats: {
+          topLanguages,
+          translatedCount,
+          uniqueLanguages: Object.keys(languageCounts).length,
+        },
       }
     },
   })

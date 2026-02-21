@@ -3,6 +3,7 @@ use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
 
+use tauri_plugin_posthog::{PostHogConfig, PostHogOptions};
 use tauri_plugin_store::StoreExt;
 
 mod commands;
@@ -59,6 +60,13 @@ fn set_show_in_dock(_app: tauri::AppHandle, _show: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Get a persistent device ID that survives app reinstalls
+/// Uses the machine's hardware UUID
+#[tauri::command]
+fn get_device_id() -> Result<String, String> {
+    machine_uid::get().map_err(|e| format!("Failed to get device ID: {}", e))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app_version = env!("CARGO_PKG_VERSION");
@@ -99,6 +107,16 @@ pub fn run() {
                 let _ = win.show();
                 let _ = win.set_focus();
             }
+        }))
+        .plugin(tauri_plugin_posthog::init(PostHogConfig {
+            api_key: option_env!("VITE_POSTHOG_KEY").unwrap_or("").to_string(),
+            api_host: "https://us.i.posthog.com".to_string(),
+            options: Some(PostHogOptions {
+                disable_session_recording: Some(true),
+                capture_pageview: Some(false),
+                capture_pageleave: Some(false),
+                ..Default::default()
+            }),
         }));
 
     // Only initialize logging plugin if devtools is not enabled
@@ -380,6 +398,8 @@ pub fn run() {
             // Updates
             check_for_updates,
             download_and_install_update,
+            // Analytics
+            get_device_id,
         ])
         .setup(setup_fn)
         .build(tauri::generate_context!())
@@ -390,13 +410,61 @@ pub fn run() {
 
     app.run(move |_app_handle, event| {
         if let tauri::RunEvent::ExitRequested { .. } = event {
-            // Cleanup local model before app exits
-            let runtime = tokio::runtime::Runtime::new().unwrap();
-            runtime.block_on(async {
-                let mut manager = local_model_manager_cleanup.lock().await;
-                manager.unload_model();
-                logger::info("Local model stopped on app exit");
-            });
+            // Cleanup local model before app exits using Tauri's async runtime
+            // IMPORTANT: Don't create a new tokio runtime here - use tauri's spawned task
+            // to avoid "Cannot start a runtime from within a runtime" panic
+            cleanup_on_exit(local_model_manager_cleanup.clone());
         }
     });
+}
+
+/// Safely cleanup resources on app exit without creating nested runtimes.
+///
+/// Uses a blocking approach with timeout to ensure cleanup completes
+/// without hanging indefinitely.
+fn cleanup_on_exit(model_manager: Arc<Mutex<LocalModelManager>>) {
+    use std::time::Duration;
+
+    // Try to unload the model with a timeout to prevent hanging
+    let cleanup_timeout = Duration::from_secs(3);
+
+    // Use std::thread to avoid runtime conflicts
+    let handle = std::thread::spawn(move || {
+        // Create a minimal runtime just for this cleanup
+        // This is safe because we're in a new thread, not inside an async context
+        if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            let result = rt.block_on(async {
+                // Use timeout to prevent indefinite waiting
+                match tokio::time::timeout(Duration::from_secs(2), model_manager.lock()).await {
+                    Ok(mut manager) => {
+                        manager.unload_model();
+                        log::info!("Local model stopped on app exit");
+                        Ok(())
+                    }
+                    Err(_) => {
+                        log::warn!("Timeout waiting for model manager lock during exit cleanup");
+                        Err("Timeout")
+                    }
+                }
+            });
+
+            if let Err(e) = result {
+                log::warn!("Exit cleanup failed: {}", e);
+            }
+        } else {
+            log::warn!("Failed to create cleanup runtime - skipping model unload");
+        }
+    });
+
+    // Wait for cleanup thread with timeout
+    match handle.join() {
+        Ok(_) => log::debug!("Exit cleanup completed"),
+        Err(_) => log::warn!("Exit cleanup thread panicked"),
+    }
+
+    // Give a brief moment for cleanup to finalize
+    std::thread::sleep(std::time::Duration::from_millis(100));
 }

@@ -20,5 +20,10 @@ export interface TranscriptionsStore {
     wordsPerMinute: number
     timeSavedMinutes: number
     avgWordsPerTranscription: number
+    languageStats: {
+      topLanguages: Array<{ code: string; count: number }>
+      translatedCount: number
+      uniqueLanguages: number
+    }
   }
 }

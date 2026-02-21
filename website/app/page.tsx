@@ -6,6 +6,7 @@ import Benefits from '@/components/sections/Benefits'
 import AdvancedFeatures from '@/components/sections/AdvancedFeatures'
 import NativeMac from '@/components/sections/NativeMac'
 import RealTime from '@/components/sections/RealTime'
+import Languages from '@/components/sections/Languages'
 import OpenSource from '@/components/sections/OpenSource'
 import GetStarted from '@/components/sections/GetStarted'
 import Pricing from '@/components/sections/Pricing'
@@ -27,6 +28,7 @@ export default function Home() {
           <AdvancedFeatures />
           <NativeMac />
           <RealTime />
+          <Languages />
           <OpenSource />
           <GetStarted />
           <Pricing />

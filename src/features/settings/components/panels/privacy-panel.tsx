@@ -11,6 +11,7 @@ import {
   isJsonFile,
 } from '@/utils/data-export'
 
+import { SettingsInfoTooltip } from '../settings-info-tooltip'
 import { SettingsPanel, SettingItem, SettingsSection } from './settings-panel'
 import { useSettingsStore } from '../../store'
 
@@ -180,6 +181,9 @@ export function PrivacyPanel() {
               onCheckedChange={handleAnalyticsToggle}
               disabled={analyticsLoading}
             />
+          }
+          info={
+            <SettingsInfoTooltip content="We collect anonymous data like feature usage, app crashes, and performance metrics. No personal data, transcription content, or audio is ever collected. This helps us fix bugs and improve the app." />
           }
         />
       </SettingsSection>

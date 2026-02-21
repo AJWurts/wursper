@@ -1,64 +1,36 @@
 /**
- * PostHog initialization - single function for all windows
+ * PostHog initialization using Tauri plugin
+ * The plugin handles initialization on the Rust side
  */
-import posthog from 'posthog-js'
-
-const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY || ''
-const POSTHOG_HOST =
-  import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com'
-const IS_DEVELOPMENT = import.meta.env.DEV
 
 let isInitialized = false
 
 export interface InitAnalyticsOptions {
-  autocapture?: boolean
-  capturePageview?: boolean
-  capturePageleave?: boolean
-  sessionRecording?: boolean
   onLoaded?: () => void
 }
 
 /**
- * Initialize PostHog analytics.
- * - Safe to call multiple times (only initializes once)
- * - Async and non-blocking - UI renders immediately
- * - Shares opt-out status across windows via localStorage
- * - onLoaded is called even if already initialized
+ * Initialize analytics.
+ * With the Tauri plugin, PostHog is already initialized on the Rust side.
+ * This function just marks the frontend as ready.
  *
- * @param options - Optional configuration overrides
+ * @param options - Optional configuration
  */
 export function initAnalytics(options: InitAnalyticsOptions = {}): void {
   const { onLoaded } = options
 
-  // Already initialized or disabled - call onLoaded immediately if provided
-  if (isInitialized || IS_DEVELOPMENT || !POSTHOG_KEY) {
-    if (onLoaded && isInitialized) {
-      // Use setTimeout to avoid sync setState in React effects
+  if (isInitialized) {
+    if (onLoaded) {
       setTimeout(onLoaded, 0)
     }
     return
   }
 
-  const {
-    autocapture = false,
-    capturePageview = false,
-    capturePageleave = false,
-    sessionRecording = false,
-  } = options
-
-  posthog.init(POSTHOG_KEY, {
-    api_host: POSTHOG_HOST,
-    person_profiles: 'identified_only',
-    autocapture,
-    capture_pageview: capturePageview,
-    capture_pageleave: capturePageleave,
-    disable_session_recording: !sessionRecording,
-    persistence: 'localStorage',
-    respect_dnt: true,
-    loaded: onLoaded,
-  })
-
   isInitialized = true
+
+  if (onLoaded) {
+    setTimeout(onLoaded, 0)
+  }
 }
 
 /**

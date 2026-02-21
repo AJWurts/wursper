@@ -1,37 +1,48 @@
-import { usePostHog } from '@posthog/react'
 import { useCallback } from 'react'
+import { PostHog } from 'tauri-plugin-posthog-api'
 
 import { useAnalyticsContext } from './context'
 import { AnalyticsEvents } from './events'
 
 /**
  * Hook for analytics tracking in React components
- * Uses PostHog's React hook for proper context integration
+ * Uses Tauri PostHog plugin for native analytics
  */
 export function useAnalytics() {
-  const posthogClient = usePostHog()
   const { isEnabled } = useAnalyticsContext()
 
   const capture = useCallback(
-    (event: string, properties?: Record<string, unknown>) => {
+    async (event: string, properties?: Record<string, unknown>) => {
       if (!isEnabled) return
-      posthogClient.capture(event, properties)
+      try {
+        await PostHog.capture(event, properties)
+      } catch (error) {
+        console.error('[Analytics] Failed to capture event:', error)
+      }
     },
-    [posthogClient, isEnabled]
+    [isEnabled]
   )
 
   const identify = useCallback(
-    (userId: string, properties?: Record<string, unknown>) => {
+    async (userId: string, properties?: Record<string, unknown>) => {
       if (!isEnabled) return
-      posthogClient.identify(userId, properties)
+      try {
+        await PostHog.identify(userId, properties)
+      } catch (error) {
+        console.error('[Analytics] Failed to identify user:', error)
+      }
     },
-    [posthogClient, isEnabled]
+    [isEnabled]
   )
 
-  const reset = useCallback(() => {
+  const reset = useCallback(async () => {
     if (!isEnabled) return
-    posthogClient.reset()
-  }, [posthogClient, isEnabled])
+    try {
+      await PostHog.reset()
+    } catch (error) {
+      console.error('[Analytics] Failed to reset:', error)
+    }
+  }, [isEnabled])
 
   const trackRecording = useCallback(
     (props: {
@@ -128,7 +139,6 @@ export function useAnalytics() {
   )
 
   return {
-    posthog: posthogClient,
     capture,
     identify,
     reset,

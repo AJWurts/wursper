@@ -1,17 +1,24 @@
 /**
- * Analytics utilities for Zustand stores
- * Stores can't use React hooks, so they use posthog directly
- * PostHog handles opt-out internally once initialized by AnalyticsProvider
+ * Analytics utilities for Zustand stores and non-React code
+ * Uses Tauri PostHog plugin for native analytics
  */
-import posthog from 'posthog-js'
+import { PostHog } from 'tauri-plugin-posthog-api'
 
 import { AnalyticsEvents } from './events'
 
 const IS_DEVELOPMENT = import.meta.env.DEV
 
-function capture(event: string, properties?: Record<string, unknown>) {
-  if (IS_DEVELOPMENT) return
-  posthog.capture(event, properties)
+async function capture(event: string, properties?: Record<string, unknown>) {
+  // Never capture analytics in development mode
+  if (IS_DEVELOPMENT) {
+    return
+  }
+
+  try {
+    await PostHog.capture(event, properties)
+  } catch (error) {
+    console.error('[Analytics] Failed to capture event:', error)
+  }
 }
 
 /**

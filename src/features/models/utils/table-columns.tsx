@@ -71,7 +71,11 @@ function CostRAMCell({
             <span className={`text-[10px] ${ramColor}`}>{ramText}</span>
           </div>
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
+        <TooltipContent
+          side="top"
+          className="text-xs bg-popover text-popover-foreground border border-border shadow-xl"
+          showArrow={false}
+        >
           <p>No API costs</p>
           <p className="text-muted-foreground">Requires ~{ramGB} GB RAM</p>
         </TooltipContent>
@@ -86,7 +90,11 @@ function CostRAMCell({
           {costText}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
+      <TooltipContent
+        side="top"
+        className="text-xs bg-popover text-popover-foreground border border-border shadow-xl"
+        showArrow={false}
+      >
         {pricing?.costPerMinute !== undefined
           ? `$${pricing.costPerMinute.toFixed(3)} per minute`
           : pricing?.inputCostPer1M !== undefined
@@ -142,12 +150,17 @@ export function createSTTColumns(
     {
       id: 'languages',
       header: 'Lang',
-      size: 55,
-      minSize: 55,
-      maxSize: 55,
+      size: 75,
+      minSize: 75,
+      maxSize: 75,
       cell: ({ row }) => {
         const capabilities = getModelCapabilities(row.original.id)
-        return <ModelLanguagesCell capabilities={capabilities} />
+        return (
+          <ModelLanguagesCell
+            capabilities={capabilities}
+            isSelected={row.original.isSelected}
+          />
+        )
       },
     },
     {

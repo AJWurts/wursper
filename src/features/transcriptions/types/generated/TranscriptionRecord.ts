@@ -4,4 +4,12 @@ import type { SourceType } from "./SourceType";
 /**
  * Simplified transcription record for frontend
  */
-export type TranscriptionRecord = { id: string, text: string, timestamp: bigint, duration: number | null, wordCount: number, modelId: string, provider: string, hasAudio: boolean, sourceType: SourceType, originalFilename: string | null, };
+export type TranscriptionRecord = { id: string, text: string, timestamp: bigint, duration: number | null, wordCount: number, modelId: string, provider: string, hasAudio: boolean, sourceType: SourceType, originalFilename: string | null, 
+/**
+ * Whether the output was translated to English
+ */
+translatedToEnglish: boolean, 
+/**
+ * The language code of the original transcription
+ */
+language: string | null, };

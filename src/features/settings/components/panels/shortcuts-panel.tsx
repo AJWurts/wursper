@@ -1,6 +1,7 @@
 import { Switch } from '@/components/ui/switch'
 
 import { useSettingsStore } from '../../store'
+import { SettingsInfoTooltip } from '../settings-info-tooltip'
 import { ShortcutRecorder } from '../shortcut-recorder'
 import { SettingsPanel, SettingItem, SettingsSection } from './settings-panel'
 
@@ -27,6 +28,9 @@ export function ShortcutsPanel() {
               checked={settings.shortcuts.globalShortcutsEnabled}
               onCheckedChange={setGlobalShortcutsEnabled}
             />
+          }
+          info={
+            <SettingsInfoTooltip content="Global shortcuts work from any app, even when Dicta is in the background. Disable if they conflict with shortcuts in other applications." />
           }
         />
 

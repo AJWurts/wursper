@@ -34,6 +34,7 @@ interface SettingItemProps {
   action?: ReactNode
   children?: ReactNode
   disabled?: boolean
+  info?: ReactNode
 }
 
 export function SettingItem({
@@ -42,23 +43,46 @@ export function SettingItem({
   action,
   children,
   disabled,
+  info,
 }: SettingItemProps) {
   return (
     <div
-      className={cn(
-        'flex items-start justify-between gap-4 py-4',
-        disabled && 'opacity-50'
-      )}
+      className="flex items-start justify-between gap-4 py-4"
       aria-disabled={disabled ?? false}
     >
-      <div className="flex-1 space-y-1">
-        <h3 className="text-sm font-medium leading-none">{title}</h3>
+      <div
+        className={cn(
+          'flex-1 space-y-1 transition-opacity',
+          disabled && 'opacity-50'
+        )}
+      >
+        <div className="flex items-center gap-1.5">
+          <h3
+            className={cn(
+              'text-sm font-medium leading-none',
+              disabled && 'text-muted-foreground'
+            )}
+          >
+            {title}
+          </h3>
+          {/* Info tooltip should always be interactive */}
+          {info && <div className="opacity-100">{info}</div>}
+        </div>
         {description && (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p
+            className={cn(
+              'text-sm text-muted-foreground',
+              disabled && 'text-muted-foreground/60'
+            )}
+          >
+            {description}
+          </p>
         )}
         {children && <div className="pt-2">{children}</div>}
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && (
+        <div className={cn('shrink-0', disabled && 'opacity-50')}>{action}</div>
+      )}
     </div>
   )
 }

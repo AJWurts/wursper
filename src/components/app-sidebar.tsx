@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   Home,
   Palette,
   Brain,
@@ -55,6 +56,11 @@ const menuItems = [
     title: 'Models',
     icon: Brain,
     path: '/models',
+  },
+  {
+    title: 'Stats',
+    icon: BarChart3,
+    path: '/stats',
   },
 ]
 

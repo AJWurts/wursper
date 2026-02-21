@@ -27,6 +27,8 @@ export const defaultSettings: Settings = {
     autoPaste: false,
     autoCopyToClipboard: false,
     speechToTextModelId: null,
+    translateToEnglish: false,
+    autoDetectLanguage: false,
   },
   shortcuts: {
     pasteLastTranscript: 'CmdOrCtrl+Shift+V',

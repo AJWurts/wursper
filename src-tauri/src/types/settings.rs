@@ -29,6 +29,10 @@ pub struct TranscriptionSettings {
     pub auto_paste: bool,
     pub auto_copy_to_clipboard: bool,
     pub speech_to_text_model_id: Option<String>,
+    #[serde(default)]
+    pub translate_to_english: bool,
+    #[serde(default)]
+    pub auto_detect_language: bool,
 }
 
 /// Shortcuts settings
@@ -96,6 +100,8 @@ impl Default for Settings {
                 auto_paste: false,
                 auto_copy_to_clipboard: false,
                 speech_to_text_model_id: None,
+                translate_to_english: false,
+                auto_detect_language: false,
             },
             shortcuts: ShortcutsSettings {
                 paste_last_transcript: "CmdOrCtrl+Shift+V".to_string(),

@@ -98,7 +98,11 @@ export function ModelAccuracyCell({ capabilities }: ModelAccuracyCellProps) {
           </div>
         </div>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
+      <TooltipContent
+        side="top"
+        className="text-xs bg-popover text-popover-foreground border border-border shadow-xl"
+        showArrow={false}
+      >
         {isSTT ? 'Accuracy' : 'Quality'}: {label}
       </TooltipContent>
     </Tooltip>

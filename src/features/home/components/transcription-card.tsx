@@ -1,4 +1,4 @@
-import { Trash2, Upload } from 'lucide-react'
+import { Languages, Trash2, Upload } from 'lucide-react'
 import { useMemo } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -28,6 +28,7 @@ export function TranscriptionCard({
   // Only fetch audio path if the transcription has audio saved
   const { audioPath } = useAudioPath(transcription.hasAudio ? timestamp : null)
   const isUploaded = transcription.sourceType === 'upload'
+  const isTranslated = transcription.translatedToEnglish
 
   // Highlight search matches
   const highlightedText = useMemo(() => {
@@ -59,6 +60,12 @@ export function TranscriptionCard({
                   {transcription.originalFilename}
                 </span>
               )}
+              {isTranslated && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                  <Languages className="h-2.5 w-2.5" />
+                  Translated
+                </span>
+              )}
             </div>
             <p className="text-[13px] leading-relaxed text-foreground line-clamp-2 mb-1.5">
               {highlightedText
@@ -82,6 +89,12 @@ export function TranscriptionCard({
               <span>{transcription.wordCount} words</span>
               <span className="w-px h-3 bg-border" />
               <span>{formatDuration(transcription.duration ?? undefined)}</span>
+              {transcription.language && transcription.language !== 'en' && (
+                <>
+                  <span className="w-px h-3 bg-border" />
+                  <span className="uppercase">{transcription.language}</span>
+                </>
+              )}
             </div>
           </div>
 

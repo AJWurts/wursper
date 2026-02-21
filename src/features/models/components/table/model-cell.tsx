@@ -39,7 +39,11 @@ export function ModelCell({ model }: ModelCellProps) {
               <TooltipTrigger asChild>
                 <Star className="h-3 w-3 flex-shrink-0 fill-amber-500 text-amber-500" />
               </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
+              <TooltipContent
+                side="top"
+                className="text-xs bg-popover text-popover-foreground border border-border shadow-xl"
+                showArrow={false}
+              >
                 Recommended
               </TooltipContent>
             </Tooltip>

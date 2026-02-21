@@ -26,6 +26,11 @@ pub struct TranscriptionRecord {
     #[serde(default)]
     pub source_type: SourceType,
     pub original_filename: Option<String>,
+    /// Whether the output was translated to English
+    #[serde(default)]
+    pub translated_to_english: bool,
+    /// The language code of the original transcription
+    pub language: Option<String>,
 }
 
 /// Get the recordings directory path
@@ -155,6 +160,8 @@ pub async fn get_all_transcriptions(app: AppHandle) -> Result<Vec<TranscriptionR
                     has_audio: metadata.has_audio,
                     source_type: metadata.source_type.clone(),
                     original_filename: metadata.original_filename.clone(),
+                    translated_to_english: metadata.translated_to_english,
+                    language: Some(metadata.language_selected.clone()),
                 });
             }
             Err(e) => {

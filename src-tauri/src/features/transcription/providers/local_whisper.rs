@@ -50,12 +50,14 @@ fn _convert_audio_to_samples(audio_data: Vec<u8>) -> Result<Vec<f32>, String> {
 /// * `audio_data` - Raw audio bytes in WAV format
 /// * `model` - Model name (currently ignored, uses loaded model)
 /// * `language` - Optional language code (e.g., "en", "es")
+/// * `translate` - If true, translate output to English
 /// * `state` - Shared LocalModelManager state
 #[command]
 pub async fn transcribe_with_local_whisper(
     audio_data: Vec<u8>,
     model: Option<String>,
     language: Option<String>,
+    translate: bool,
     state: State<'_, Arc<Mutex<LocalModelManager>>>,
 ) -> Result<TranscriptionResponse, String> {
     // Note: The model parameter is kept for API compatibility but not used
@@ -66,7 +68,7 @@ pub async fn transcribe_with_local_whisper(
     // The LocalModelManager handles audio conversion internally
     let mut manager = state.lock().await;
     let text = manager
-        .transcribe(audio_data, language.clone())
+        .transcribe(audio_data, language.clone(), translate)
         .map_err(|e| e.to_string())?;
 
     Ok(TranscriptionResponse {
@@ -87,6 +89,7 @@ pub async fn transcribe_with_local_whisper(
 /// * `model_path` - Path to the model file (optional for apple-speech)
 /// * `model_id` - Model identifier
 /// * `language` - Optional language code (e.g., "en", "es")
+/// * `translate` - If true, translate output to English
 /// * `state` - Shared LocalModelManager state
 pub async fn transcribe_with_local_engine(
     audio_data: Vec<u8>,
@@ -94,6 +97,7 @@ pub async fn transcribe_with_local_engine(
     model_path: Option<String>,
     model_id: Option<String>,
     language: Option<String>,
+    translate: bool,
     state: State<'_, Arc<Mutex<LocalModelManager>>>,
 ) -> Result<TranscriptionResponse, String> {
     let mut manager = state.lock().await;
@@ -125,7 +129,7 @@ pub async fn transcribe_with_local_engine(
 
     // Transcribe using the loaded engine
     let text = manager
-        .transcribe(audio_data, language.clone())
+        .transcribe(audio_data, language.clone(), translate)
         .map_err(|e| e.to_string())?;
 
     Ok(TranscriptionResponse {

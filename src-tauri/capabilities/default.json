@@ -24,6 +24,7 @@
     "notification:default",
     "macos-permissions:allow-check-accessibility-permission",
     "macos-permissions:allow-request-accessibility-permission",
-    "process:allow-restart"
+    "process:allow-restart",
+    "posthog:default"
   ]
 }

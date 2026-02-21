@@ -10,6 +10,17 @@ use tauri::{App, AppHandle, Emitter, Manager, Result};
 use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
+// Popular languages for tray menu (top 7)
+const TRAY_LANGUAGES: &[(&str, &str)] = &[
+    ("en", "English"),
+    ("es", "Spanish"),
+    ("fr", "French"),
+    ("de", "German"),
+    ("pt", "Portuguese"),
+    ("zh", "Chinese"),
+    ("hi", "Hindi"),
+];
+
 /// Sets up the system tray icon and menu
 pub fn setup_tray(app: &App, model_manager_cleanup: Arc<Mutex<LocalModelManager>>) -> Result<()> {
     // Get available audio devices
@@ -79,6 +90,55 @@ pub fn setup_tray(app: &App, model_manager_cleanup: Arc<Mutex<LocalModelManager>
 
     let microphone_submenu = microphone_submenu_builder.build()?;
 
+    // Get current language and model compatibility for language submenu
+    let current_language = store.get("settings").and_then(|settings| {
+        settings
+            .get("transcription")
+            .and_then(|transcription| transcription.get("language"))
+            .and_then(|language| language.as_str().map(|s| s.to_string()))
+    });
+
+    let is_english_only_model = check_model_is_english_only(app);
+
+    // Build language submenu
+    let mut language_submenu_builder = SubmenuBuilder::new(app, "Language");
+
+    for (code, name) in TRAY_LANGUAGES {
+        let menu_id = format!("lang-{}", code);
+        let is_selected = current_language.as_deref() == Some(*code);
+
+        let mut label = String::new();
+        if is_selected {
+            label.push_str("✓ ");
+        }
+        // Show warning for non-English languages when using English-only model
+        if is_english_only_model && *code != "en" {
+            label.push_str("⚠️ ");
+        }
+        label.push_str(name);
+
+        language_submenu_builder = language_submenu_builder.item(&MenuItem::with_id(
+            app,
+            menu_id.as_str(),
+            label.as_str(),
+            true,
+            None::<&str>,
+        )?);
+    }
+
+    // Add separator and "More Languages..." option
+    language_submenu_builder = language_submenu_builder
+        .separator()
+        .item(&MenuItem::with_id(
+            app,
+            "lang-more",
+            "More Languages...",
+            true,
+            None::<&str>,
+        )?);
+
+    let language_submenu = language_submenu_builder.build()?;
+
     // Build quick actions submenu
     let quick_actions_submenu = SubmenuBuilder::new(app, "Quick Actions")
         .item(&MenuItem::with_id(
@@ -125,6 +185,7 @@ pub fn setup_tray(app: &App, model_manager_cleanup: Arc<Mutex<LocalModelManager>
         .separator()
         // Input configuration
         .item(&microphone_submenu)
+        .item(&language_submenu)
         .separator()
         // Settings & configuration
         .item(&MenuItem::with_id(
@@ -170,12 +231,12 @@ pub fn setup_tray(app: &App, model_manager_cleanup: Arc<Mutex<LocalModelManager>
 }
 
 /// Rebuilds the tray menu with updated microphone selection
-fn rebuild_tray_menu(app: &AppHandle, _model_manager: Arc<Mutex<LocalModelManager>>) -> Result<()> {
+async fn rebuild_tray_menu(
+    app: &AppHandle,
+    _model_manager: Arc<Mutex<LocalModelManager>>,
+) -> Result<()> {
     // Get available audio devices
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    let devices = runtime
-        .block_on(enumerate_audio_devices())
-        .unwrap_or_default();
+    let devices = enumerate_audio_devices().await.unwrap_or_default();
 
     // Get current microphone device from settings
     // Reload the store to ensure we have fresh data
@@ -187,12 +248,14 @@ fn rebuild_tray_menu(app: &AppHandle, _model_manager: Arc<Mutex<LocalModelManage
     })?;
 
     // Force reload from disk to get latest changes
+    log::info!("Reloading store from disk...");
     store.reload().map_err(|e| {
         tauri::Error::Io(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!("Failed to reload store: {}", e),
         ))
     })?;
+    log::info!("Store reloaded successfully");
 
     let current_device_id = store.get("settings").and_then(|settings| {
         settings
@@ -201,9 +264,22 @@ fn rebuild_tray_menu(app: &AppHandle, _model_manager: Arc<Mutex<LocalModelManage
             .and_then(|device_id| device_id.as_str().map(|s| s.to_string()))
     });
 
-    log::debug!(
-        "Rebuilding tray menu, current device ID: {:?}",
+    log::info!(
+        "Rebuilding tray menu - current microphone device ID: {:?}",
         current_device_id
+    );
+
+    // Get current language for language submenu
+    let current_language = store.get("settings").and_then(|settings| {
+        settings
+            .get("transcription")
+            .and_then(|transcription| transcription.get("language"))
+            .and_then(|language| language.as_str().map(|s| s.to_string()))
+    });
+
+    log::info!(
+        "Rebuilding tray menu - current language: {:?}",
+        current_language
     );
 
     // Build microphone submenu dynamically
@@ -253,6 +329,47 @@ fn rebuild_tray_menu(app: &AppHandle, _model_manager: Arc<Mutex<LocalModelManage
 
     let microphone_submenu = microphone_submenu_builder.build()?;
 
+    let is_english_only_model = check_model_is_english_only(app);
+
+    // Build language submenu
+    let mut language_submenu_builder = SubmenuBuilder::new(app, "Language");
+
+    for (code, name) in TRAY_LANGUAGES {
+        let menu_id = format!("lang-{}", code);
+        let is_selected = current_language.as_deref() == Some(*code);
+
+        let mut label = String::new();
+        if is_selected {
+            label.push_str("✓ ");
+        }
+        // Show warning for non-English languages when using English-only model
+        if is_english_only_model && *code != "en" {
+            label.push_str("⚠️ ");
+        }
+        label.push_str(name);
+
+        language_submenu_builder = language_submenu_builder.item(&MenuItem::with_id(
+            app,
+            menu_id.as_str(),
+            label.as_str(),
+            true,
+            None::<&str>,
+        )?);
+    }
+
+    // Add separator and "More Languages..." option
+    language_submenu_builder = language_submenu_builder
+        .separator()
+        .item(&MenuItem::with_id(
+            app,
+            "lang-more",
+            "More Languages...",
+            true,
+            None::<&str>,
+        )?);
+
+    let language_submenu = language_submenu_builder.build()?;
+
     // Build quick actions submenu
     let quick_actions_submenu = SubmenuBuilder::new(app, "Quick Actions")
         .item(&MenuItem::with_id(
@@ -300,6 +417,7 @@ fn rebuild_tray_menu(app: &AppHandle, _model_manager: Arc<Mutex<LocalModelManage
         .separator()
         // Input configuration
         .item(&microphone_submenu)
+        .item(&language_submenu)
         .separator()
         // Settings & configuration
         .item(&MenuItem::with_id(
@@ -401,8 +519,138 @@ fn set_microphone_device(
         }),
     );
 
-    // Rebuild tray menu to update checkmarks
-    rebuild_tray_menu(app, model_manager)?;
+    // Rebuild tray menu to update checkmarks (spawn async task)
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = rebuild_tray_menu(&app_clone, model_manager).await {
+            log::error!(
+                "Failed to rebuild tray menu after microphone change: {:?}",
+                e
+            );
+        }
+    });
+
+    Ok(())
+}
+
+/// Check if the currently selected model only supports English
+fn check_model_is_english_only<M: Manager<tauri::Wry>>(app: &M) -> bool {
+    let settings_store = match app.store("settings") {
+        Ok(store) => store,
+        Err(_) => return false,
+    };
+
+    // Get selected model ID - clone the settings to avoid lifetime issues
+    let settings = match settings_store.get("settings") {
+        Some(s) => s.clone(),
+        None => return false,
+    };
+
+    let selected_model_id = settings
+        .get("transcription")
+        .and_then(|t| t.get("speechToTextModelId"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let Some(selected_id) = selected_model_id else {
+        return false;
+    };
+
+    let models_store = match app.store("models.json") {
+        Ok(store) => store,
+        Err(_) => return false,
+    };
+
+    // Find model and check language support - clone the models to avoid lifetime issues
+    let models_value = match models_store.get("models") {
+        Some(m) => m.clone(),
+        None => return false,
+    };
+
+    let models = match models_value.as_array() {
+        Some(m) => m,
+        None => return false,
+    };
+
+    for model_value in models {
+        if let Some(model) = model_value.as_object() {
+            let id = model.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            if id == selected_id {
+                let language_support = model
+                    .get("languageSupport")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("multilingual");
+                return language_support == "english_only";
+            }
+        }
+    }
+    false
+}
+
+/// Sets the transcription language in settings and rebuilds tray menu
+fn set_transcription_language(
+    app: &AppHandle,
+    language: String,
+    model_manager: Arc<Mutex<LocalModelManager>>,
+) -> Result<()> {
+    let store = app.store("settings").map_err(|e| {
+        tauri::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to get store: {}", e),
+        ))
+    })?;
+
+    // Get current settings
+    let mut settings = store
+        .get("settings")
+        .ok_or_else(|| {
+            tauri::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "No settings found in store",
+            ))
+        })?
+        .clone();
+
+    // Update language
+    if let Some(settings_obj) = settings.as_object_mut() {
+        if let Some(transcription) = settings_obj.get_mut("transcription") {
+            if let Some(transcription_obj) = transcription.as_object_mut() {
+                transcription_obj.insert("language".to_string(), json!(language));
+            }
+        }
+    }
+
+    // Save updated settings
+    store.set("settings", settings);
+    store.save().map_err(|e| {
+        tauri::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to save store: {}", e),
+        ))
+    })?;
+
+    // Invalidate settings cache
+    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
+        if let Err(e) = cache.invalidate(app) {
+            log::warn!("Failed to invalidate settings cache: {}", e);
+        }
+    }
+
+    // Emit event to notify frontend
+    let _ = app.emit(
+        "language-changed",
+        json!({
+            "language": language
+        }),
+    );
+
+    // Rebuild tray menu to update checkmarks (spawn async task)
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = rebuild_tray_menu(&app_clone, model_manager).await {
+            log::error!("Failed to rebuild tray menu after language change: {:?}", e);
+        }
+    });
 
     Ok(())
 }
@@ -479,6 +727,37 @@ fn handle_tray_event(
                 logger::error(&format!("Failed to set microphone to {}: {}", device_id, e));
             } else {
                 logger::info(&format!("Microphone set to: {}", device_id));
+            }
+        }
+        "lang-more" => {
+            // Open settings to language selection
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+                let _ = app.emit("open-settings", serde_json::json!({ "section": "general" }));
+            }
+        }
+        event_id if event_id.starts_with("lang-") => {
+            // Check if recording is active - don't allow language changes during recording
+            if let Some(state_manager) = app.try_state::<Arc<RecordingStateManager>>() {
+                if state_manager.is_active() {
+                    logger::warn("Cannot change language while recording is active");
+                    return;
+                }
+            }
+            // Handle language selection
+            let language_code = event_id.strip_prefix("lang-").unwrap().to_string();
+            if let Err(e) = set_transcription_language(
+                app,
+                language_code.clone(),
+                model_manager_cleanup.clone(),
+            ) {
+                logger::error(&format!(
+                    "Failed to set transcription language to {}: {}",
+                    language_code, e
+                ));
+            } else {
+                logger::info(&format!("Transcription language set to: {}", language_code));
             }
         }
         "shortcuts" => {
@@ -634,6 +913,12 @@ fn handle_menu_bar_event(app: &AppHandle, event_id: &str) {
 
 #[tauri::command]
 pub async fn rebuild_tray_menu_command(app: AppHandle) -> Result<()> {
+    log::info!("rebuild_tray_menu_command called from frontend");
     let model_manager = app.state::<Arc<Mutex<LocalModelManager>>>();
-    rebuild_tray_menu(&app, model_manager.inner().clone())
+    let result = rebuild_tray_menu(&app, model_manager.inner().clone()).await;
+    match &result {
+        Ok(_) => log::info!("Tray menu rebuilt successfully"),
+        Err(e) => log::error!("Failed to rebuild tray menu: {:?}", e),
+    }
+    result
 }

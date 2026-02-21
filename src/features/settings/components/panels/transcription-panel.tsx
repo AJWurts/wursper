@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { Switch } from '@/components/ui/switch'
 
+import { SettingsInfoTooltip } from '../settings-info-tooltip'
 import { SettingsPanel, SettingItem, SettingsSection } from './settings-panel'
 import { useSettingsStore } from '../../store'
 
@@ -65,6 +66,9 @@ export function TranscriptionPanel() {
               disabled={autoPasteLoading}
             />
           }
+          info={
+            <SettingsInfoTooltip content="After transcription completes, the text is automatically pasted wherever your cursor is - great for writing emails, documents, or chat messages hands-free." />
+          }
         />
 
         <SettingItem
@@ -90,6 +94,9 @@ export function TranscriptionPanel() {
               onCheckedChange={handleAiProcessingToggle}
               disabled={aiProcessingLoading}
             />
+          }
+          info={
+            <SettingsInfoTooltip content="Uses AI to clean up your transcription - fixing grammar, adding punctuation, and applying styles based on context. Requires a post-processing model to be selected and started in the Models page." />
           }
         />
       </SettingsSection>

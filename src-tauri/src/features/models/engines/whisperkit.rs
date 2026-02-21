@@ -78,6 +78,7 @@ impl LocalModelEngine for WhisperKitEngine {
         &mut self,
         _audio_data: Vec<u8>,
         _language: Option<String>,
+        _translate: bool,
     ) -> Result<String, String> {
         if self.status != ModelStatus::Ready {
             return Err("WhisperKit engine is not ready".to_string());
@@ -87,6 +88,7 @@ impl LocalModelEngine for WhisperKitEngine {
         // 1. Save audio_data to temp file
         // 2. Call WhisperKit.transcribe(audioPath:) via Swift bridge
         // 3. Return the transcription result
+        // Note: translate parameter can be passed to WhisperKit when implemented
 
         Err("WhisperKit engine transcription is not yet implemented. \
              Requires Swift bridge to call WhisperKit Swift package."

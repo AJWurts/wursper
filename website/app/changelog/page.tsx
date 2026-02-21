@@ -71,6 +71,26 @@ function formatSize(bytes: number): string {
 function getVersionChanges(tagName: string): string[] {
   // Based on actual development progress
   const changes: Record<string, string[]> = {
+    'v0.0.9': [
+      'Added auto-detect language - Dicta now identifies what language you\'re speaking automatically',
+      'New translate to English option - speak in any language and get English text output',
+      'Support for 100+ languages with multilingual Whisper models',
+      'Quick language switcher in the system tray menu',
+      'Added helpful tooltips throughout settings to explain features',
+      'Improved language compatibility warnings when using English-only models',
+    ],
+    'v0.0.8': [
+      'Performance improvements for faster transcription processing',
+      'Fixed audio recording reliability issues',
+      'Improved model loading and memory management',
+      'Minor UI polish and bug fixes',
+    ],
+    'v0.0.7': [
+      'New search feature - quickly find any transcription by keyword',
+      'Filter transcriptions by date, model, or language',
+      'Search matches are now highlighted in transcription text',
+      'Improved transcription history browsing experience',
+    ],
     'v0.0.3': [
       'Improved accessibility step with enhanced permission handling',
       'Streamlined logging across the application',

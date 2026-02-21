@@ -11,8 +11,10 @@ import { initializeModelStatusListener } from './features/models'
 import { ModelsPage } from './features/models'
 import { OnboardingPage } from './features/onboarding'
 import { SnippetsPage } from './features/snippets'
+import { StatsPage } from './features/stats'
 import { VibesPage } from './features/vibes'
 import { VocabularyPage } from './features/vocabulary'
+import { useLanguageSync } from './hooks/use-language-sync'
 import { useMicrophoneDeviceSync } from './hooks/use-microphone-device-sync'
 import { useUpdateChecker } from './hooks/use-update-checker'
 import { AnalyticsProvider, useAnalytics } from './lib/analytics'
@@ -34,6 +36,7 @@ function AppContent() {
   }, [])
 
   useMicrophoneDeviceSync()
+  useLanguageSync()
 
   const { updateState, setShowModal } = useUpdateChecker()
 
@@ -71,6 +74,7 @@ function AppContent() {
                   <Route path="/vibes" element={<VibesPage />} />
                   <Route path="/help" element={<HelpPage />} />
                   <Route path="/models" element={<ModelsPage />} />
+                  <Route path="/stats" element={<StatsPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </AppLayout>

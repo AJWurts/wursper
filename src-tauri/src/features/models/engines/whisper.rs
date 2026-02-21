@@ -62,6 +62,7 @@ impl WhisperEngine {
     /// # Arguments
     /// * `audio_data` - Audio samples as f32 values (normalized to -1.0 to 1.0)
     /// * `language` - Optional language code (e.g., "en", "es", "fr")
+    /// * `translate` - If true, translate output to English
     ///
     /// # Returns
     /// * `Ok(String)` containing the transcribed text
@@ -70,6 +71,7 @@ impl WhisperEngine {
         &mut self,
         audio_data: Vec<f32>,
         language: Option<String>,
+        translate: bool,
     ) -> Result<String, WhisperError> {
         // Ensure a model is loaded
         let model = self
@@ -82,15 +84,32 @@ impl WhisperEngine {
             return Err(WhisperError::ModelNotReady);
         }
 
-        // Create transcription parameters
+        log::info!(
+            "Whisper transcribe_internal - Model: {}, Language: {:?}, Translate: {}",
+            model.name,
+            language,
+            translate
+        );
+
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
 
-        // Set language if provided
-        if let Some(ref lang) = language {
-            params.set_language(Some(lang));
+        // Set translate mode - when true, output will be in English
+        params.set_translate(translate);
+
+        // Set language - "auto" triggers auto-detection for multilingual models
+        // Note: whisper.cpp expects "auto" string for auto-detection, not None/nullptr
+        match &language {
+            Some(lang) => {
+                log::info!("Setting Whisper language to: {}", lang);
+                params.set_language(Some(lang));
+            }
+            None => {
+                // Use "auto" to explicitly trigger language auto-detection
+                log::info!("Setting Whisper language to 'auto' (auto-detect)");
+                params.set_language(Some("auto"));
+            }
         }
 
-        // Disable printing to stdout
         params.set_print_progress(false);
         params.set_print_special(false);
         params.set_print_realtime(false);
@@ -285,12 +304,13 @@ impl LocalModelEngine for WhisperEngine {
         &mut self,
         audio_data: Vec<u8>,
         language: Option<String>,
+        translate: bool,
     ) -> Result<String, String> {
         // Convert audio bytes to samples
         let samples = Self::convert_audio_to_samples(audio_data)?;
 
         // Perform transcription
-        self.transcribe_internal(samples, language)
+        self.transcribe_internal(samples, language, translate)
             .map_err(|e| e.to_string())
     }
 

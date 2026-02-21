@@ -431,13 +431,16 @@ pub async fn stop_recording(
 
                     match crate::utils::async_fs::read_file(&audio_path_clone).await {
                         Ok(audio_data) => {
+                            let transcription_settings = get_transcription_settings(&app_clone);
+
                             let request =
                                 crate::features::transcription::orchestrator::TranscribeRequest {
                                     audio_data,
                                     timestamp,
                                     duration,
-                                    language: Some("en".to_string()),
+                                    language: transcription_settings.language,
                                     recording_device,
+                                    translate: transcription_settings.translate_to_english,
                                 };
 
                             if let Some(local_model_state) =
@@ -816,7 +819,145 @@ pub async fn force_reset_recording(
     })
 }
 
-/// Check if a speech-to-text model is selected and available for use
+struct TranscriptionSettings {
+    language: Option<String>,
+    translate_to_english: bool,
+}
+
+fn get_transcription_settings(app: &AppHandle) -> TranscriptionSettings {
+    let settings = app
+        .store("settings")
+        .ok()
+        .and_then(|store| store.get("settings"));
+
+    let transcription = settings.as_ref().and_then(|s| s.get("transcription"));
+
+    // Check if auto-detect language is enabled
+    let auto_detect_language = transcription
+        .and_then(|t| t.get("autoDetectLanguage"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    // Check if the selected model is English-only
+    let is_english_only_model = is_selected_model_english_only(app);
+
+    // Get selected model ID for logging
+    let selected_model_id = transcription
+        .and_then(|t| t.get("speechToTextModelId"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    log::info!(
+        "Transcription settings - Model: {}, AutoDetect: {}, EnglishOnly: {}",
+        selected_model_id,
+        auto_detect_language,
+        is_english_only_model
+    );
+
+    // If auto-detect is enabled AND model supports multiple languages, don't pass a language
+    // If model is English-only, always use "en" regardless of auto-detect setting
+    let language = if is_english_only_model {
+        // English-only models can't auto-detect, always use "en"
+        log::info!("Using 'en' language (English-only model)");
+        Some("en".to_string())
+    } else if auto_detect_language {
+        // Multilingual model with auto-detect enabled - let Whisper detect the language
+        log::info!("Using auto-detect (language=None)");
+        None
+    } else {
+        // Multilingual model without auto-detect - use the selected language
+        let lang = transcription
+            .and_then(|t| t.get("language"))
+            .and_then(|l| l.as_str())
+            .map(String::from)
+            .or(Some("en".to_string()));
+        log::info!("Using selected language: {:?}", lang);
+        lang
+    };
+
+    // Translate to English is disabled when auto-detect is enabled or model is English-only
+    let translate_to_english = if auto_detect_language || is_english_only_model {
+        false
+    } else {
+        transcription
+            .and_then(|t| t.get("translateToEnglish"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    };
+
+    log::info!(
+        "Final transcription settings - Language: {:?}, Translate: {}",
+        language,
+        translate_to_english
+    );
+
+    TranscriptionSettings {
+        language,
+        translate_to_english,
+    }
+}
+
+/// Check if the currently selected speech-to-text model is English-only
+fn is_selected_model_english_only(app: &AppHandle) -> bool {
+    // Get selected model ID from settings
+    let settings_store = match app.store("settings") {
+        Ok(store) => store,
+        Err(_) => return false,
+    };
+
+    let settings = match settings_store.get("settings") {
+        Some(s) => s,
+        None => return false,
+    };
+
+    let selected_model_id = settings
+        .get("transcription")
+        .and_then(|t| t.get("speechToTextModelId"))
+        .and_then(|v| v.as_str());
+
+    let selected_model_id = match selected_model_id {
+        Some(id) => id,
+        None => return false,
+    };
+
+    // Get models store
+    let models_store = match app.store("models.json") {
+        Ok(store) => store,
+        Err(_) => return false,
+    };
+
+    let models_value = match models_store.get("models") {
+        Some(v) => v,
+        None => return false,
+    };
+
+    let models = match models_value.as_array() {
+        Some(arr) => arr,
+        None => return false,
+    };
+
+    // Find the selected model and check its language support
+    for model_value in models {
+        if let Some(model) = model_value.as_object() {
+            let id = model.get("id").and_then(|v| v.as_str()).unwrap_or("");
+
+            if id == selected_model_id {
+                // Check languageSupport field
+                if let Some(language_support) =
+                    model.get("languageSupport").and_then(|v| v.as_str())
+                {
+                    return language_support == "english_only";
+                }
+
+                // Fallback: check if model ID ends with ".en" (English-only indicator)
+                return selected_model_id.contains(".en");
+            }
+        }
+    }
+
+    false
+}
+
 fn check_model_available(app: &AppHandle) -> Result<(), String> {
     // Get settings to find selected model
     let settings_store = app

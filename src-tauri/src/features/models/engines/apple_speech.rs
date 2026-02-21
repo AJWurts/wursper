@@ -355,6 +355,7 @@ impl LocalModelEngine for AppleSpeechEngine {
         &mut self,
         audio_data: Vec<u8>,
         language: Option<String>,
+        _translate: bool,
     ) -> Result<String, String> {
         log::info!(
             "Apple Speech: transcribe() called with {} bytes of audio",
@@ -374,6 +375,7 @@ impl LocalModelEngine for AppleSpeechEngine {
         #[cfg(target_os = "macos")]
         {
             // Use provided language or default
+            // Note: translate parameter not supported by Apple Speech
             let lang = language.as_ref().unwrap_or(&self.language);
             log::info!("Apple Speech: Using language: {}", lang);
 

@@ -21,4 +21,6 @@ export interface SettingsStore {
   setPostProcessingModel: (modelId: string | null) => Promise<void>
   setEnablePushToTalk: (enabled: boolean) => Promise<void>
   setPushToTalkShortcut: (shortcut: string) => Promise<void>
+  setTranslateToEnglish: (enabled: boolean) => Promise<void>
+  setAutoDetectLanguage: (enabled: boolean) => Promise<void>
 }

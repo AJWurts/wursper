@@ -263,6 +263,22 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       return
     }
 
+    // Validate language compatibility for STT models
+    if (newModel.purpose === 'speech-to-text') {
+      const settings = useSettingsStore.getState().settings
+      const selectedLanguage = settings.transcription.language
+      const isEnglishOnly = newModel.languageSupport === 'english_only'
+      const isNonEnglishLanguage = selectedLanguage !== 'en'
+
+      if (isEnglishOnly && isNonEnglishLanguage) {
+        toast.warning('Language compatibility warning', {
+          description: `${newModel.name} only supports English. Your transcription language is set to a different language. Consider switching to a multilingual model.`,
+          duration: 6000,
+        })
+        // Allow selection but warn the user
+      }
+    }
+
     // Stop previous local model if switching away (only for same purpose models)
     if (
       previousModel?.type === 'local' &&

@@ -59,7 +59,11 @@ export function ModelSpeedCell({ capabilities }: ModelSpeedCellProps) {
           </div>
         </div>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
+      <TooltipContent
+        side="top"
+        className="text-xs bg-popover text-popover-foreground border border-border shadow-xl"
+        showArrow={false}
+      >
         Speed: {label}
       </TooltipContent>
     </Tooltip>

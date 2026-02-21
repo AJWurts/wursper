@@ -13,6 +13,8 @@ export const transcriptionRecordSchema = z.object({
   hasAudio: z.boolean().optional().default(false),
   sourceType: sourceTypeSchema.optional().default('recording'),
   originalFilename: z.string().optional().nullable(),
+  translatedToEnglish: z.boolean().optional().default(false),
+  language: z.string().optional().nullable(),
 })
 
 export const transcriptionsStoreSchema = z.object({

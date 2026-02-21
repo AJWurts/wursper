@@ -113,51 +113,66 @@ impl RecordingStateManager {
         RecordingState::from_u8(self.state.load(Ordering::Acquire))
     }
 
-    /// Set state with validation (lock-free compare-exchange)
+    /// Set state with validation (lock-free compare-exchange with retry loop).
     ///
     /// Returns Ok(()) if the transition was valid and successful.
     /// Returns Err with a message if the transition is invalid.
+    ///
+    /// Uses a retry loop to handle race conditions where another thread
+    /// might change the state between our read and compare-exchange.
     pub fn set_state(&self, new_state: RecordingState) -> Result<(), String> {
-        let current = self.get_state();
+        const MAX_RETRIES: u32 = 3;
 
-        if !current.can_transition_to(&new_state) {
-            return Err(format!(
-                "Invalid state transition: {:?} -> {:?}",
-                current, new_state
-            ));
-        }
+        for attempt in 0..MAX_RETRIES {
+            let current = self.get_state();
 
-        // Use compare_exchange to atomically update state
-        // This handles the race condition where another thread might have changed the state
-        match self.state.compare_exchange(
-            current.to_u8(),
-            new_state.to_u8(),
-            Ordering::SeqCst,
-            Ordering::SeqCst,
-        ) {
-            Ok(_) => Ok(()),
-            Err(actual) => {
-                // State changed between load and CAS - retry validation
-                let actual_state = RecordingState::from_u8(actual);
-                if actual_state.can_transition_to(&new_state) {
-                    // Try once more with the actual state
-                    self.state
-                        .compare_exchange(
-                            actual,
-                            new_state.to_u8(),
-                            Ordering::SeqCst,
-                            Ordering::SeqCst,
-                        )
-                        .map(|_| ())
-                        .map_err(|_| "State changed during transition".to_string())
-                } else {
-                    Err(format!(
-                        "Invalid state transition: {:?} -> {:?}",
-                        actual_state, new_state
-                    ))
+            // Validate the transition
+            if !current.can_transition_to(&new_state) {
+                return Err(format!(
+                    "Invalid state transition: {:?} -> {:?}",
+                    current, new_state
+                ));
+            }
+
+            // Atomically update state
+            match self.state.compare_exchange_weak(
+                current.to_u8(),
+                new_state.to_u8(),
+                Ordering::SeqCst,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return Ok(()),
+                Err(actual) => {
+                    // State changed - check if we can still transition
+                    let actual_state = RecordingState::from_u8(actual);
+
+                    if !actual_state.can_transition_to(&new_state) {
+                        return Err(format!(
+                            "Invalid state transition: {:?} -> {:?} (state changed during attempt {})",
+                            actual_state, new_state, attempt + 1
+                        ));
+                    }
+
+                    // Valid transition from new state - retry
+                    log::debug!(
+                        "State changed during transition attempt {}, retrying: {:?} -> {:?}",
+                        attempt + 1,
+                        actual_state,
+                        new_state
+                    );
+
+                    // Small backoff before retry
+                    if attempt < MAX_RETRIES - 1 {
+                        std::hint::spin_loop();
+                    }
                 }
             }
         }
+
+        Err(format!(
+            "State transition failed after {} retries (high contention)",
+            MAX_RETRIES
+        ))
     }
 
     /// Atomically try to transition from expected state to new state.

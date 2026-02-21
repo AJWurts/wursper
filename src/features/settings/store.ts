@@ -62,6 +62,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
             storedSettings?.transcription?.autoCopyToClipboard ?? false,
           speechToTextModelId:
             storedSettings?.transcription?.speechToTextModelId ?? null,
+          translateToEnglish:
+            storedSettings?.transcription?.translateToEnglish ?? false,
+          autoDetectLanguage:
+            storedSettings?.transcription?.autoDetectLanguage ?? false,
         },
         shortcuts: {
           pasteLastTranscript:
@@ -154,7 +158,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       set({ settings: newSettings })
 
       // Rebuild tray menu to reflect the microphone change
+      console.log(
+        '[Settings] Rebuilding tray menu after microphone change:',
+        deviceId
+      )
       await invoke('rebuild_tray_menu_command')
+      console.log('[Settings] Tray menu rebuild complete')
       storeAnalytics.trackSettingChange(
         'microphoneDevice',
         deviceId ? 'changed' : 'default'
@@ -177,6 +186,14 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await store.set('settings', newSettings)
       await store.save()
       set({ settings: newSettings })
+
+      // Rebuild tray menu to reflect the language change
+      console.log(
+        '[Settings] Rebuilding tray menu after language change:',
+        language
+      )
+      await invoke('rebuild_tray_menu_command')
+      console.log('[Settings] Tray menu rebuild complete')
       storeAnalytics.trackSettingChange('transcriptionLanguage', language)
     } catch (error) {
       console.error('Error saving transcription language:', error)
@@ -471,6 +488,52 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       storeAnalytics.trackSettingChange('pushToTalkShortcut', shortcut)
     } catch (error) {
       console.error('Error saving push-to-talk shortcut:', error)
+    }
+  },
+
+  setTranslateToEnglish: async (enabled: boolean) => {
+    try {
+      const store = await getTauriStore()
+      const newSettings = {
+        ...get().settings,
+        transcription: {
+          ...get().settings.transcription,
+          translateToEnglish: enabled,
+        },
+      }
+      await store.set('settings', newSettings)
+      await store.save()
+      set({ settings: newSettings })
+      storeAnalytics.trackSettingChange('translateToEnglish', enabled)
+    } catch (error) {
+      console.error('Error saving translate to English setting:', error)
+    }
+  },
+
+  setAutoDetectLanguage: async (enabled: boolean) => {
+    try {
+      const store = await getTauriStore()
+      const currentSettings = get().settings
+      const newSettings = {
+        ...currentSettings,
+        transcription: {
+          ...currentSettings.transcription,
+          autoDetectLanguage: enabled,
+          // When enabling auto-detect, disable translate to English
+          translateToEnglish: enabled
+            ? false
+            : currentSettings.transcription.translateToEnglish,
+        },
+      }
+      await store.set('settings', newSettings)
+      await store.save()
+      set({ settings: newSettings })
+
+      // Rebuild tray menu to reflect the auto-detect change
+      await invoke('rebuild_tray_menu_command')
+      storeAnalytics.trackSettingChange('autoDetectLanguage', enabled)
+    } catch (error) {
+      console.error('Error saving auto-detect language setting:', error)
     }
   },
 }))

@@ -42,6 +42,8 @@ pub struct TranscribeRequest {
     pub duration: Option<f64>,
     pub language: Option<String>, // ISO 639-1 language code (e.g., "en", "es", "fr")
     pub recording_device: Option<String>,
+    #[serde(default)]
+    pub translate: bool, // If true, translate to English (Whisper-specific)
 }
 
 /// Unified transcription command that handles the entire flow:
@@ -107,6 +109,7 @@ pub async fn transcribe_and_process(
         request.audio_data.clone(),
         &selected_model,
         request.language.clone(),
+        request.translate,
         local_model_state,
     )
     .await?;
@@ -265,6 +268,7 @@ pub async fn transcribe_and_process(
         post_processing_model_name,
         post_processing_provider,
         request.language.unwrap_or_else(|| "en".to_string()),
+        request.translate,
         request
             .recording_device
             .unwrap_or_else(|| "Unknown".to_string()),
@@ -467,6 +471,7 @@ async fn transcribe_with_provider(
     audio_data: Vec<u8>,
     model: &SelectedModel,
     language: Option<String>,
+    translate: bool,
     local_model_state: State<'_, Arc<Mutex<LocalModelManager>>>,
 ) -> Result<String, String> {
     let response = match model.provider.as_str() {
@@ -475,12 +480,13 @@ async fn transcribe_with_provider(
                 .await
                 .map_err(|_| "OpenAI API key not found. Please add your API key in settings.")?;
 
+            // Note: OpenAI API translation is handled differently (separate endpoint)
             openai::transcribe_with_openai(
                 audio_data,
                 api_key,
                 Some(model.id.clone()),
-                language.clone(), // Use selected language
-                None,             // filename (defaults to audio.wav for recordings)
+                language.clone(),
+                None,
             )
             .await?
         }
@@ -490,6 +496,7 @@ async fn transcribe_with_provider(
                 .map_err(|_| "Google API key not found. Please add your API key in settings.")?;
 
             // Convert ISO 639-1 code to Google's format (e.g., "en" -> "en-US")
+            // Note: Google API doesn't support translation in transcription
             let google_language = language
                 .clone()
                 .map(|lang| format!("{}-US", lang.to_uppercase()))
@@ -501,7 +508,8 @@ async fn transcribe_with_provider(
             local_whisper::transcribe_with_local_whisper(
                 audio_data,
                 Some(model.id.clone()),
-                language.clone(), // Use selected language
+                language.clone(),
+                translate,
                 local_model_state,
             )
             .await?
@@ -517,7 +525,7 @@ async fn transcribe_with_provider(
                 audio_data,
                 api_key,
                 Some(model.id.clone()),
-                None, // filename (defaults to audio.wav for recordings)
+                None,
             )
             .await?
         }
@@ -529,6 +537,7 @@ async fn transcribe_with_provider(
                 model.path.clone(),
                 Some(model.id.clone()),
                 language.clone(),
+                translate,
                 local_model_state,
             )
             .await?
@@ -541,6 +550,7 @@ async fn transcribe_with_provider(
                 model.path.clone(),
                 Some(model.id.clone()),
                 language.clone(),
+                translate,
                 local_model_state,
             )
             .await?
@@ -553,6 +563,7 @@ async fn transcribe_with_provider(
                 model.path.clone(),
                 Some(model.id.clone()),
                 language.clone(),
+                translate,
                 local_model_state,
             )
             .await?

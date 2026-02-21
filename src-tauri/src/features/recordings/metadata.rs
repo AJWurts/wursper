@@ -31,6 +31,8 @@ pub struct RecordingMetadata {
 
     // Language
     pub language_selected: String, // Language code (e.g., "en")
+    #[serde(default)]
+    pub translated_to_english: bool, // Whether output was translated to English
 
     // Device information
     pub recording_device: String, // Microphone device ID/name
@@ -143,6 +145,7 @@ impl RecordingMetadata {
         post_processing_model_name: Option<String>,
         post_processing_provider: Option<String>,
         language: String,
+        translated_to_english: bool,
         recording_device: String,
         focused_app_name: String,
         focused_app_category: String,
@@ -166,6 +169,7 @@ impl RecordingMetadata {
             post_processing_model_name,
             post_processing_provider,
             language,
+            translated_to_english,
             recording_device,
             focused_app_name,
             focused_app_category,
@@ -194,6 +198,7 @@ impl RecordingMetadata {
         post_processing_model_name: Option<String>,
         post_processing_provider: Option<String>,
         language: String,
+        translated_to_english: bool,
         recording_device: String,
         focused_app_name: String,
         focused_app_category: String,
@@ -227,6 +232,7 @@ impl RecordingMetadata {
             post_processing_model_name,
             post_processing_provider,
             language_selected: language,
+            translated_to_english,
             recording_device,
             post_processing_enabled,
             style_applied,

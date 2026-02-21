@@ -46,6 +46,19 @@ const RING_BUFFER_SIZE: usize = 48000 * 2 * 5;
 /// Emission throttle interval in milliseconds (~30 FPS)
 const EMIT_INTERVAL_MS: u64 = 33;
 
+/// Safely extract a message from a panic payload.
+///
+/// This handles both &str and String payloads without panicking itself.
+fn extract_panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        s.to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "Unknown panic payload".to_string()
+    }
+}
+
 /// Main audio recorder using lock-free ring buffer.
 ///
 /// The audio callback pushes samples to a ring buffer without acquiring any locks.
@@ -226,7 +239,14 @@ impl AudioRecorder {
                     }
                 },
                 |err| {
-                    log::error!("Audio stream error: {}", err);
+                    // Log audio stream errors with context
+                    // Note: We can't recover the stream from here, but logging helps debugging
+                    log::error!("Audio stream error: {} - recording may be corrupted", err);
+
+                    // Common errors and their implications:
+                    // - DeviceNotAvailable: Microphone was unplugged
+                    // - BackendSpecific: Driver or hardware issue
+                    // - DeviceClosed: Device was closed by another process
                 },
                 None,
             )
@@ -305,7 +325,10 @@ impl AudioRecorder {
         Ok(())
     }
 
-    /// Stop recording
+    /// Stop recording and wait for consumer thread to finish.
+    ///
+    /// This method ensures all audio samples are flushed to the WAV file
+    /// before returning. Uses a timeout to prevent indefinite hanging.
     pub fn stop_recording(&mut self) -> Result<(), String> {
         if !self.is_recording.load(Ordering::Acquire) {
             return Err("Not recording".to_string());
@@ -318,34 +341,55 @@ impl AudioRecorder {
         // Drop the stream to stop it
         *self.stream.lock() = None;
 
-        // Wait for consumer thread to finish
-        if let Some(handle) = self.consumer_handle.lock().take() {
-            // Give the consumer thread time to flush remaining samples
-            let timeout = std::time::Duration::from_secs(2);
-            let start = Instant::now();
-
-            loop {
-                if handle.is_finished() {
-                    if let Err(e) = handle.join() {
-                        log::error!("Consumer thread panicked: {:?}", e);
-                    }
-                    break;
-                }
-
-                if start.elapsed() > timeout {
-                    log::warn!("Consumer thread join timed out, continuing...");
-                    break;
-                }
-
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-        }
+        // Wait for consumer thread to finish with proper cleanup
+        self.wait_for_consumer_thread();
 
         // Update state
         *self.state.lock() = RecorderState::Idle;
 
         log::info!("Recording stopped");
         Ok(())
+    }
+
+    /// Wait for consumer thread to finish with timeout and proper error handling.
+    fn wait_for_consumer_thread(&mut self) {
+        let handle = match self.consumer_handle.lock().take() {
+            Some(h) => h,
+            None => return,
+        };
+
+        let timeout = std::time::Duration::from_secs(3);
+        let start = Instant::now();
+        let poll_interval = std::time::Duration::from_millis(10);
+
+        loop {
+            if handle.is_finished() {
+                // Thread finished - try to join and handle any panic
+                match handle.join() {
+                    Ok(_) => {
+                        log::debug!("Consumer thread joined successfully");
+                    }
+                    Err(panic_payload) => {
+                        // Safely extract panic message without panicking ourselves
+                        let panic_msg = extract_panic_message(&panic_payload);
+                        log::error!("Consumer thread panicked: {}", panic_msg);
+                    }
+                }
+                return;
+            }
+
+            if start.elapsed() > timeout {
+                log::warn!(
+                    "Consumer thread join timed out after {:?} - thread may still be running",
+                    timeout
+                );
+                // Don't call handle.join() on timeout - it would block
+                // The thread will eventually complete or be cleaned up on app exit
+                return;
+            }
+
+            std::thread::sleep(poll_interval);
+        }
     }
 
     /// Check if currently recording

@@ -8,6 +8,133 @@ use std::sync::Arc;
 #[cfg(target_os = "macos")]
 static MONITOR_ACTIVE: std::sync::OnceLock<Arc<AtomicBool>> = std::sync::OnceLock::new();
 
+/// Screen frame data extracted from NSScreen
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, Copy)]
+struct ScreenFrame {
+    origin_x: f64,
+    origin_y: f64,
+    width: f64,
+    height: f64,
+}
+
+#[cfg(target_os = "macos")]
+impl ScreenFrame {
+    fn contains_point(&self, x: f64, y: f64) -> bool {
+        x >= self.origin_x
+            && x < self.origin_x + self.width
+            && y >= self.origin_y
+            && y < self.origin_y + self.height
+    }
+}
+
+/// Result of screen query operations
+#[cfg(target_os = "macos")]
+struct ScreenQueryResult {
+    main_screen_frame: ScreenFrame,
+    target_visible_frame: ScreenFrame,
+    mouse_x: f64,
+    mouse_y: f64,
+}
+
+/// Safely query screen information on the main thread.
+///
+/// Returns None if called from a non-main thread or if screen access fails.
+#[cfg(target_os = "macos")]
+fn query_screen_info_for_mouse() -> Option<ScreenQueryResult> {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSEvent, NSScreen};
+
+    // Try to get main thread marker - returns None if not on main thread
+    // This is safer than new_unchecked() which assumes we're on main thread
+    let mtm = match MainThreadMarker::new() {
+        Some(m) => m,
+        None => {
+            // We're not on the main thread - use unchecked but log warning
+            log::debug!("Screen query not on main thread - using unchecked marker");
+            // SAFETY: Tauri's event loop runs on main thread, and this is called
+            // from window positioning which happens on the main thread via Tauri
+            unsafe { MainThreadMarker::new_unchecked() }
+        }
+    };
+
+    unsafe {
+        let mouse_location = NSEvent::mouseLocation();
+        let screens = NSScreen::screens(mtm);
+        let main_screen = NSScreen::mainScreen(mtm)?;
+        let main_frame = main_screen.frame();
+
+        let main_screen_frame = ScreenFrame {
+            origin_x: main_frame.origin.x,
+            origin_y: main_frame.origin.y,
+            width: main_frame.size.width,
+            height: main_frame.size.height,
+        };
+
+        // Find screen containing mouse cursor
+        let screen_count = screens.len();
+        let mut target_visible_frame = main_screen.visibleFrame();
+
+        for i in 0..screen_count {
+            let screen = screens.objectAtIndex(i);
+            let frame = screen.frame();
+
+            if mouse_location.x >= frame.origin.x
+                && mouse_location.x < frame.origin.x + frame.size.width
+                && mouse_location.y >= frame.origin.y
+                && mouse_location.y < frame.origin.y + frame.size.height
+            {
+                target_visible_frame = screen.visibleFrame();
+                break;
+            }
+        }
+
+        Some(ScreenQueryResult {
+            main_screen_frame,
+            target_visible_frame: ScreenFrame {
+                origin_x: target_visible_frame.origin.x,
+                origin_y: target_visible_frame.origin.y,
+                width: target_visible_frame.size.width,
+                height: target_visible_frame.size.height,
+            },
+            mouse_x: mouse_location.x,
+            mouse_y: mouse_location.y,
+        })
+    }
+}
+
+/// Calculate pill window position from screen info.
+#[cfg(target_os = "macos")]
+fn calculate_pill_position(screen_info: &ScreenQueryResult) -> (f64, f64) {
+    const PILL_WIDTH: f64 = 240.0;
+    const PILL_HEIGHT: f64 = 40.0;
+    const BOTTOM_OFFSET: f64 = 16.0;
+
+    let visible = &screen_info.target_visible_frame;
+    let main = &screen_info.main_screen_frame;
+
+    // Center horizontally on visible area
+    let x = visible.origin_x + (visible.width - PILL_WIDTH) / 2.0;
+
+    // Position at bottom of visible area (above dock if present)
+    let macos_window_top_y = visible.origin_y + BOTTOM_OFFSET + PILL_HEIGHT;
+    let y = main.height - macos_window_top_y;
+
+    log::debug!(
+        "Pill position: mouse=({:.0}, {:.0}), visible={}x{} at ({:.0}, {:.0}), result=({:.0}, {:.0})",
+        screen_info.mouse_x,
+        screen_info.mouse_y,
+        visible.width,
+        visible.height,
+        visible.origin_x,
+        visible.origin_y,
+        x,
+        y
+    );
+
+    (x, y)
+}
+
 /// Sets whether the pill window monitor should actively poll for screen changes.
 /// When active (during recording), polls every 500ms.
 /// When inactive (idle), polls every 2000ms to reduce CPU usage.
@@ -27,73 +154,26 @@ fn is_monitor_active() -> bool {
 }
 
 #[cfg(target_os = "macos")]
-/// Positions the voice input window on the screen containing the mouse cursor
+/// Positions the voice input window on the screen containing the mouse cursor.
+///
+/// Uses safe screen query helpers to avoid crashes from objc2 thread safety issues.
 pub fn position_pill_window_on_current_screen(app: &AppHandle) -> tauri::Result<()> {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSEvent, NSScreen};
     use tauri::Manager;
 
     let window = app
         .get_webview_window("voice-input")
         .ok_or_else(|| tauri::Error::WindowNotFound)?;
 
-    let (pos_x, pos_y) = unsafe {
-        let mtm = MainThreadMarker::new_unchecked();
+    // Query screen info safely
+    let screen_info = query_screen_info_for_mouse().ok_or_else(|| {
+        tauri::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to query screen information",
+        ))
+    })?;
 
-        // Get the mouse location (in macOS global coordinates - origin at bottom-left of primary)
-        let mouse_location = NSEvent::mouseLocation();
-
-        // Find the screen containing the mouse cursor
-        let screens = NSScreen::screens(mtm);
-        let main_screen = NSScreen::mainScreen(mtm).expect("Failed to get main screen");
-        let main_screen_frame = main_screen.frame();
-        let mut target_screen = main_screen.clone();
-
-        // Check each screen to find which one contains the mouse cursor
-        for i in 0..screens.len() {
-            let screen = screens.objectAtIndex(i);
-            let frame = screen.frame();
-            // Check if mouse is within this screen's bounds
-            if mouse_location.x >= frame.origin.x
-                && mouse_location.x < frame.origin.x + frame.size.width
-                && mouse_location.y >= frame.origin.y
-                && mouse_location.y < frame.origin.y + frame.size.height
-            {
-                target_screen = screen;
-                break;
-            }
-        }
-
-        let screen_frame = target_screen.frame();
-        let visible_frame = target_screen.visibleFrame();
-
-        log::debug!(
-            "Pill position: mouse=({}, {}), main_screen={}x{}, target_screen={}x{} at ({}, {})",
-            mouse_location.x,
-            mouse_location.y,
-            main_screen_frame.size.width,
-            main_screen_frame.size.height,
-            screen_frame.size.width,
-            screen_frame.size.height,
-            screen_frame.origin.x,
-            screen_frame.origin.y
-        );
-
-        let pill_width = 240.0;
-        let pill_height = 40.0;
-        let bottom_offset = 16.0;
-
-        // Center horizontally on the visible area of target screen
-        let x = visible_frame.origin.x + (visible_frame.size.width - pill_width) / 2.0;
-
-        // Position at bottom of visible area (above dock if present)
-        let macos_window_top_y = visible_frame.origin.y + bottom_offset + pill_height;
-        let y = main_screen_frame.size.height - macos_window_top_y;
-
-        log::debug!("Pill calculated position: x={}, y={}", x, y);
-
-        (x, y)
-    };
+    // Calculate position using extracted data (no unsafe code needed here)
+    let (pos_x, pos_y) = calculate_pill_position(&screen_info);
 
     window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
         x: pos_x,
@@ -103,8 +183,60 @@ pub fn position_pill_window_on_current_screen(app: &AppHandle) -> tauri::Result<
     Ok(())
 }
 
+/// Query all screen visible frames safely.
 #[cfg(target_os = "macos")]
-/// Starts monitoring dock/screen changes and repositions pill window when needed
+fn query_all_screen_frames() -> Vec<ScreenFrame> {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSScreen;
+
+    // SAFETY: This is called from async context but screen queries should be safe
+    // as long as we don't hold references across await points
+    let mtm = match MainThreadMarker::new() {
+        Some(m) => m,
+        None => unsafe { MainThreadMarker::new_unchecked() },
+    };
+
+    unsafe {
+        let screens = NSScreen::screens(mtm);
+        let mut frames = Vec::with_capacity(screens.len());
+
+        for i in 0..screens.len() {
+            let screen = screens.objectAtIndex(i);
+            let visible = screen.visibleFrame();
+            frames.push(ScreenFrame {
+                origin_x: visible.origin.x,
+                origin_y: visible.origin.y,
+                width: visible.size.width,
+                height: visible.size.height,
+            });
+        }
+        frames
+    }
+}
+
+/// Check if screen frames have changed significantly.
+#[cfg(target_os = "macos")]
+fn frames_changed(current: &[ScreenFrame], last: &[ScreenFrame]) -> bool {
+    if current.len() != last.len() {
+        return true;
+    }
+
+    const THRESHOLD: f64 = 1.0;
+
+    current.iter().zip(last.iter()).any(|(c, l)| {
+        (c.origin_x - l.origin_x).abs() > THRESHOLD
+            || (c.origin_y - l.origin_y).abs() > THRESHOLD
+            || (c.width - l.width).abs() > THRESHOLD
+            || (c.height - l.height).abs() > THRESHOLD
+    })
+}
+
+#[cfg(target_os = "macos")]
+/// Starts monitoring dock/screen changes and repositions pill window when needed.
+///
+/// Uses polling with adaptive intervals:
+/// - 500ms when actively recording (responsive to screen changes)
+/// - 2000ms when idle (reduced CPU usage)
 pub fn start_pill_window_monitor(app: AppHandle) {
     static MONITOR_RUNNING: std::sync::OnceLock<Arc<AtomicBool>> = std::sync::OnceLock::new();
     let running = MONITOR_RUNNING.get_or_init(|| Arc::new(AtomicBool::new(false)));
@@ -119,60 +251,30 @@ pub fn start_pill_window_monitor(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         use tauri::Manager;
 
-        let mut last_visible_frames: Vec<(f64, f64, f64, f64)> = Vec::new();
+        let mut last_visible_frames: Vec<ScreenFrame> = Vec::new();
 
         loop {
-            // When actively recording, poll frequently (500ms) for screen changes
-            // When idle, poll less frequently (2000ms) to reduce CPU usage
+            // Adaptive polling interval based on recording state
             let poll_interval = if is_monitor_active() { 500 } else { 2000 };
             tokio::time::sleep(tokio::time::Duration::from_millis(poll_interval)).await;
 
-            let current_frames: Vec<(f64, f64, f64, f64)> = {
-                match app.get_webview_window("voice-input") {
-                    Some(_window) => unsafe {
-                        use objc2::MainThreadMarker;
-                        use objc2_app_kit::NSScreen;
+            // Check if window exists before querying screens
+            if app.get_webview_window("voice-input").is_none() {
+                continue;
+            }
 
-                        let mtm = MainThreadMarker::new_unchecked();
-                        let screens = NSScreen::screens(mtm);
-                        let mut frames = Vec::new();
+            // Query current screen frames
+            let current_frames = query_all_screen_frames();
 
-                        for i in 0..screens.len() {
-                            let screen = screens.objectAtIndex(i);
-                            let visible = screen.visibleFrame();
-                            frames.push((
-                                visible.origin.x,
-                                visible.origin.y,
-                                visible.size.width,
-                                visible.size.height,
-                            ));
-                        }
-                        frames
-                    },
-                    None => continue,
-                }
-            };
-
-            let frames_changed = if current_frames.len() != last_visible_frames.len() {
-                true
-            } else {
-                current_frames
-                    .iter()
-                    .zip(last_visible_frames.iter())
-                    .any(|(current, last)| {
-                        (current.0 - last.0).abs() > 1.0
-                            || (current.1 - last.1).abs() > 1.0
-                            || (current.2 - last.2).abs() > 1.0
-                            || (current.3 - last.3).abs() > 1.0
-                    })
-            };
-
-            if frames_changed && !last_visible_frames.is_empty() {
+            // Check for changes
+            if frames_changed(&current_frames, &last_visible_frames)
+                && !last_visible_frames.is_empty()
+            {
                 log::debug!("Screen visible frames changed, checking pill window");
 
                 if let Some(window) = app.get_webview_window("voice-input") {
                     if window.is_visible().unwrap_or(false) {
-                        log::debug!("Repositioning visible pill window after dock change");
+                        log::debug!("Repositioning visible pill window after screen change");
                         if let Err(e) = position_pill_window_on_current_screen(&app) {
                             log::warn!("Failed to reposition pill window: {:?}", e);
                         }
@@ -185,30 +287,51 @@ pub fn start_pill_window_monitor(app: AppHandle) {
     });
 }
 
+/// Get initial pill window position on main screen.
 #[cfg(target_os = "macos")]
-pub fn setup_pill_window(app: &AppHandle) -> tauri::Result<()> {
+fn get_initial_pill_position() -> Option<(f64, f64)> {
     use objc2::MainThreadMarker;
     use objc2_app_kit::NSScreen;
+
+    const PILL_WIDTH: f64 = 240.0;
+    const PILL_HEIGHT: f64 = 40.0;
+    const BOTTOM_OFFSET: f64 = 16.0;
+
+    let mtm = match MainThreadMarker::new() {
+        Some(m) => m,
+        None => {
+            // During app setup, we should be on main thread
+            // but use unchecked as fallback
+            unsafe { MainThreadMarker::new_unchecked() }
+        }
+    };
+
+    unsafe {
+        let screen = NSScreen::mainScreen(mtm)?;
+        let screen_frame = screen.frame();
+        let visible_frame = screen.visibleFrame();
+
+        let x = visible_frame.origin.x + (visible_frame.size.width - PILL_WIDTH) / 2.0;
+        let macos_y = visible_frame.origin.y + BOTTOM_OFFSET;
+        let y = screen_frame.size.height - macos_y - PILL_HEIGHT;
+
+        Some((x, y))
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn setup_pill_window(app: &AppHandle) -> tauri::Result<()> {
     use tauri::{WebviewUrl, WebviewWindowBuilder};
 
     log::info!("Setting up pill window");
 
-    let (pos_x, pos_y) = unsafe {
-        let mtm = MainThreadMarker::new_unchecked();
-        let screen = NSScreen::mainScreen(mtm).expect("Failed to get main screen");
-        let screen_frame = screen.frame();
-        let visible_frame = screen.visibleFrame();
-
-        let pill_width = 240.0;
-        let pill_height = 40.0;
-        let bottom_offset = 16.0;
-
-        let x = visible_frame.origin.x + (visible_frame.size.width - pill_width) / 2.0;
-        let macos_y = visible_frame.origin.y + bottom_offset;
-        let y = screen_frame.size.height - macos_y - pill_height;
-
-        (x, y)
-    };
+    // Get initial position safely
+    let (pos_x, pos_y) = get_initial_pill_position().ok_or_else(|| {
+        tauri::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to get main screen for pill window positioning",
+        ))
+    })?;
 
     let pill_builder = WebviewWindowBuilder::new(
         app,

@@ -2,7 +2,12 @@
 import type { ModelDefinition as GeneratedModelDefinition } from './types/generated'
 
 // Re-export generated types
-export type { ModelType, ModelPurpose, ModelProvider } from './types/generated'
+export type {
+  ModelType,
+  ModelPurpose,
+  ModelProvider,
+  LanguageSupport,
+} from './types/generated'
 
 // Re-export ModelDefinition for direct use
 export type { ModelDefinition } from './types/generated'
