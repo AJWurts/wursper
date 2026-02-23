@@ -22,6 +22,7 @@ export default defineConfig(async () => ({
         main: path.resolve(__dirname, 'index.html'),
         'voice-input': path.resolve(__dirname, 'voice-input.html'),
         toast: path.resolve(__dirname, 'toast.html'),
+        'command-result': path.resolve(__dirname, 'command-result.html'),
       },
     },
   },

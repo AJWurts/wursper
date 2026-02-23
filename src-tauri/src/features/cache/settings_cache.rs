@@ -32,6 +32,8 @@ struct CachedSettings {
     ptt_shortcut: Option<String>,
     enable_push_to_talk: Option<bool>,
     paste_shortcut: Option<String>,
+    command_mode_shortcut: Option<String>,
+    enable_command_mode: Option<bool>,
     global_shortcuts_enabled: Option<bool>,
     display_mode: Option<VoiceInputDisplayMode>,
 }
@@ -46,6 +48,8 @@ impl Default for CachedSettings {
             ptt_shortcut: None,
             enable_push_to_talk: None,
             paste_shortcut: None,
+            command_mode_shortcut: None,
+            enable_command_mode: None,
             global_shortcuts_enabled: None,
             display_mode: None,
         }
@@ -196,6 +200,14 @@ impl SettingsCache {
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
+                new_cache.command_mode_shortcut = shortcuts
+                    .get("commandModeShortcut")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+
+                new_cache.enable_command_mode =
+                    shortcuts.get("enableCommandMode").and_then(|v| v.as_bool());
+
                 new_cache.global_shortcuts_enabled = shortcuts
                     .get("globalShortcutsEnabled")
                     .and_then(|v| v.as_bool());
@@ -256,10 +268,22 @@ impl SettingsCache {
         self.get_snapshot().paste_shortcut.clone()
     }
 
+    /// Get cached command mode shortcut.
+    #[inline]
+    pub fn get_command_mode_shortcut(&self) -> Option<String> {
+        self.get_snapshot().command_mode_shortcut.clone()
+    }
+
     /// Get cached global shortcuts enabled setting.
     #[inline]
     pub fn get_global_shortcuts_enabled(&self) -> Option<bool> {
         self.get_snapshot().global_shortcuts_enabled
+    }
+
+    /// Get cached enable command mode setting.
+    #[inline]
+    pub fn get_enable_command_mode(&self) -> Option<bool> {
+        self.get_snapshot().enable_command_mode
     }
 
     /// Get cached voice input display mode.

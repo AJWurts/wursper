@@ -31,8 +31,9 @@ use features::models::{
 use features::recordings::{delete_recording, get_all_transcriptions, get_recording_audio_path};
 use features::security::{get_api_key, has_api_key, remove_api_key, store_api_key};
 use features::shortcuts::{
-    disable_global_shortcuts, enable_global_shortcuts, register_escape_shortcut,
-    register_ptt_shortcut, unregister_escape_shortcut, unregister_ptt_shortcut,
+    disable_global_shortcuts, enable_global_shortcuts, register_command_mode_shortcut,
+    register_escape_shortcut, register_ptt_shortcut, unregister_command_mode_shortcut,
+    unregister_escape_shortcut, unregister_ptt_shortcut, update_command_mode_shortcut,
     update_paste_shortcut, update_ptt_shortcut, update_voice_input_shortcut,
     RecordingShortcutHandler, ShortcutManager,
 };
@@ -315,6 +316,7 @@ pub fn run() {
 
         features::window::setup_pill_window(&handle)?;
         features::window::setup_toast_window(&handle)?;
+        features::window::setup_command_result_window(&handle)?;
 
         // Start pill window position monitor (tracks screen changes)
         #[cfg(target_os = "macos")]
@@ -391,6 +393,9 @@ pub fn run() {
             // Shortcuts management
             update_voice_input_shortcut,
             update_paste_shortcut,
+            update_command_mode_shortcut,
+            register_command_mode_shortcut,
+            unregister_command_mode_shortcut,
             register_ptt_shortcut,
             unregister_ptt_shortcut,
             update_ptt_shortcut,

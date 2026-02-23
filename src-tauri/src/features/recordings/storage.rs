@@ -31,6 +31,9 @@ pub struct TranscriptionRecord {
     pub translated_to_english: bool,
     /// The language code of the original transcription
     pub language: Option<String>,
+    /// For command mode: the generated content (text field contains the instruction)
+    #[serde(default)]
+    pub command_result: Option<String>,
 }
 
 /// Get the recordings directory path
@@ -162,6 +165,7 @@ pub async fn get_all_transcriptions(app: AppHandle) -> Result<Vec<TranscriptionR
                     original_filename: metadata.original_filename.clone(),
                     translated_to_english: metadata.translated_to_english,
                     language: Some(metadata.language_selected.clone()),
+                    command_result: metadata.command_result.clone(),
                 });
             }
             Err(e) => {

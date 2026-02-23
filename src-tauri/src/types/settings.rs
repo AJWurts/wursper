@@ -54,6 +54,14 @@ pub struct TranscriptionSettings {
 pub struct ShortcutsSettings {
     pub paste_last_transcript: String,
     pub global_shortcuts_enabled: bool,
+    #[serde(default)]
+    pub enable_command_mode: bool,
+    #[serde(default = "default_command_mode_shortcut")]
+    pub command_mode_shortcut: String,
+}
+
+fn default_command_mode_shortcut() -> String {
+    "CmdOrCtrl+Shift+Space".to_string()
 }
 
 /// System settings
@@ -119,6 +127,8 @@ impl Default for Settings {
             shortcuts: ShortcutsSettings {
                 paste_last_transcript: "CmdOrCtrl+Shift+V".to_string(),
                 global_shortcuts_enabled: true,
+                enable_command_mode: false,
+                command_mode_shortcut: default_command_mode_shortcut(),
             },
             system: SystemSettings {
                 show_in_dock: true,

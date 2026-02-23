@@ -1,5 +1,12 @@
-import { Languages, Trash2, Upload } from 'lucide-react'
-import { useMemo } from 'react'
+import {
+  ChevronDown,
+  ChevronUp,
+  Languages,
+  Sparkles,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import { useMemo, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
@@ -24,10 +31,12 @@ export function TranscriptionCard({
   isLast,
   searchQuery,
 }: TranscriptionCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
   const timestamp = parseInt(transcription.id.split('-')[0])
   // Only fetch audio path if the transcription has audio saved
   const { audioPath } = useAudioPath(transcription.hasAudio ? timestamp : null)
   const isUploaded = transcription.sourceType === 'upload'
+  const isCommand = transcription.sourceType === 'command'
   const isTranslated = transcription.translatedToEnglish
 
   // Highlight search matches
@@ -35,6 +44,12 @@ export function TranscriptionCard({
     if (!searchQuery) return null
     return highlightSearchMatches(transcription.text, searchQuery)
   }, [transcription.text, searchQuery])
+
+  // For command mode, highlight the command result as well
+  const highlightedCommandResult = useMemo(() => {
+    if (!searchQuery || !transcription.commandResult) return null
+    return highlightSearchMatches(transcription.commandResult, searchQuery)
+  }, [transcription.commandResult, searchQuery])
 
   return (
     <div
@@ -49,6 +64,12 @@ export function TranscriptionCard({
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
+              {isCommand && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-teal-500/10 text-teal-400 rounded">
+                  <Sparkles className="h-2.5 w-2.5" />
+                  Command
+                </span>
+              )}
               {isUploaded && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500 rounded">
                   <Upload className="h-2.5 w-2.5" />
@@ -67,7 +88,12 @@ export function TranscriptionCard({
                 </span>
               )}
             </div>
-            <p className="text-[13px] leading-relaxed text-foreground line-clamp-2 mb-1.5">
+            <p
+              className={cn(
+                'text-[13px] leading-relaxed text-foreground mb-1.5',
+                !isExpanded && 'line-clamp-2'
+              )}
+            >
               {highlightedText
                 ? highlightedText.map((segment, i) =>
                     segment.isHighlight ? (
@@ -83,6 +109,32 @@ export function TranscriptionCard({
                   )
                 : transcription.text}
             </p>
+
+            {/* Command mode: show generated content when expanded */}
+            {isCommand && transcription.commandResult && isExpanded && (
+              <div className="my-3 p-3 rounded-lg bg-teal-500/5 border border-teal-500/10">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-teal-400/70 mb-1.5">
+                  Generated Content
+                </p>
+                <p className="text-[13px] leading-relaxed text-foreground/90 whitespace-pre-wrap">
+                  {highlightedCommandResult
+                    ? highlightedCommandResult.map((segment, i) =>
+                        segment.isHighlight ? (
+                          <mark
+                            key={i}
+                            className="bg-yellow-200/80 dark:bg-yellow-500/30 text-foreground rounded-sm px-0.5"
+                          >
+                            {segment.text}
+                          </mark>
+                        ) : (
+                          <span key={i}>{segment.text}</span>
+                        )
+                      )
+                    : transcription.commandResult}
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
               <span>{formatTime(transcription.timestamp)}</span>
               <span className="w-px h-3 bg-border" />
@@ -99,9 +151,29 @@ export function TranscriptionCard({
           </div>
 
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Expand/collapse button for command mode */}
+            {isCommand && transcription.commandResult && (
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="text-muted-foreground hover:text-teal-400"
+                onClick={() => setIsExpanded(!isExpanded)}
+                aria-label={isExpanded ? 'Collapse' : 'Expand'}
+              >
+                {isExpanded ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            )}
             {audioPath && <PlayButton audioPath={audioPath} size={26} />}
             <CopyButton
-              content={transcription.text}
+              content={
+                isCommand && transcription.commandResult
+                  ? transcription.commandResult
+                  : transcription.text
+              }
               size="icon"
               variant="ghost"
             />

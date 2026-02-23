@@ -25,5 +25,19 @@ export interface TranscriptionsStore {
       translatedCount: number
       uniqueLanguages: number
     }
+    sourceStats: {
+      recordings: number
+      uploads: number
+      commands: number
+      todayRecordings: number
+      todayCommands: number
+    }
+    commandStats: {
+      totalCommands: number
+      todayCommands: number
+      wordsGenerated: number
+      todayWordsGenerated: number
+      avgWordsPerCommand: number
+    }
   }
 }

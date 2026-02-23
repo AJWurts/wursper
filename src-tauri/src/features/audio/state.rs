@@ -10,10 +10,22 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use ts_rs::TS;
 
+/// Recording mode determines how the transcription is processed
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, Default)]
+#[ts(export, export_to = "../../src/features/voice-input/types/generated/")]
+#[serde(rename_all = "lowercase")]
+pub enum RecordingMode {
+    /// Normal dictation - transcribe and format speech
+    #[default]
+    Dictation,
+    /// Command mode - use speech as instruction for LLM to generate content
+    Command,
+}
+
 /// Recording state machine
 ///
 /// The state transitions are validated to ensure correct operation:
-/// - Idle -> Starting -> Recording -> Stopping -> Transcribing -> Idle
+/// - Idle -> Starting -> Recording -> Stopping -> Transcribing -> [Generating] -> Idle
 /// - Error can be entered from any state and recovered from
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/features/voice-input/types/generated/")]
@@ -25,7 +37,8 @@ pub enum RecordingState {
     Recording = 2,
     Stopping = 3,
     Transcribing = 4,
-    Error = 5,
+    Generating = 5, // LLM content generation phase (Command Mode)
+    Error = 6,
 }
 
 impl RecordingState {
@@ -42,8 +55,10 @@ impl RecordingState {
             (Recording, Stopping) | (Recording, Error) => true,
             // From Stopping
             (Stopping, Transcribing) | (Stopping, Idle) | (Stopping, Error) => true,
-            // From Transcribing
-            (Transcribing, Idle) | (Transcribing, Error) => true,
+            // From Transcribing - can go to Generating (command mode) or Idle (dictation)
+            (Transcribing, Idle) | (Transcribing, Generating) | (Transcribing, Error) => true,
+            // From Generating (command mode)
+            (Generating, Idle) | (Generating, Error) => true,
             // From Error - allow recovery to Starting or back to Idle
             (Error, Idle) | (Error, Starting) => true,
             // Same state is always allowed
@@ -62,6 +77,7 @@ impl RecordingState {
             2 => RecordingState::Recording,
             3 => RecordingState::Stopping,
             4 => RecordingState::Transcribing,
+            5 => RecordingState::Generating,
             _ => RecordingState::Error, // Default to Error for invalid values
         }
     }
@@ -86,6 +102,8 @@ impl RecordingState {
 pub struct RecordingStateManager {
     /// Recording state - accessed atomically for lock-free reads/writes
     state: AtomicU8,
+    /// Recording mode (Dictation or Command)
+    recording_mode: Mutex<RecordingMode>,
     /// Current recording file path
     current_file: Mutex<Option<PathBuf>>,
     /// Error message if in error state
@@ -100,6 +118,7 @@ impl RecordingStateManager {
     pub fn new() -> Self {
         Self {
             state: AtomicU8::new(RecordingState::Idle.to_u8()),
+            recording_mode: Mutex::new(RecordingMode::default()),
             current_file: Mutex::new(None),
             error_message: Mutex::new(None),
             recording_device: Mutex::new(None),
@@ -248,9 +267,20 @@ impl RecordingStateManager {
         *self.start_time.lock()
     }
 
+    /// Set recording mode (Dictation or Command)
+    pub fn set_recording_mode(&self, mode: RecordingMode) {
+        *self.recording_mode.lock() = mode;
+    }
+
+    /// Get recording mode
+    pub fn get_recording_mode(&self) -> RecordingMode {
+        *self.recording_mode.lock()
+    }
+
     /// Reset all state to initial values
     pub fn reset(&self) {
         self.force_set_state(RecordingState::Idle);
+        *self.recording_mode.lock() = RecordingMode::default();
         *self.current_file.lock() = None;
         *self.error_message.lock() = None;
         *self.recording_device.lock() = None;
@@ -284,10 +314,13 @@ mod tests {
         assert!(Recording.can_transition_to(&Stopping));
         assert!(Stopping.can_transition_to(&Transcribing));
         assert!(Transcribing.can_transition_to(&Idle));
+        assert!(Transcribing.can_transition_to(&Generating)); // Command mode
+        assert!(Generating.can_transition_to(&Idle));
 
         // Invalid transitions
         assert!(!Idle.can_transition_to(&Recording)); // Must go through Starting
         assert!(!Recording.can_transition_to(&Transcribing)); // Must go through Stopping
+        assert!(!Generating.can_transition_to(&Recording)); // Can't go back to recording
     }
 
     #[test]
@@ -332,6 +365,7 @@ mod tests {
     fn test_state_from_u8() {
         assert_eq!(RecordingState::from_u8(0), RecordingState::Idle);
         assert_eq!(RecordingState::from_u8(2), RecordingState::Recording);
+        assert_eq!(RecordingState::from_u8(5), RecordingState::Generating);
         assert_eq!(RecordingState::from_u8(255), RecordingState::Error); // Invalid -> Error
     }
 

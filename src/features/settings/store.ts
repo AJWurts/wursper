@@ -79,6 +79,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
             'CmdOrCtrl+Shift+V',
           globalShortcutsEnabled:
             storedSettings?.shortcuts?.globalShortcutsEnabled ?? true,
+          enableCommandMode:
+            storedSettings?.shortcuts?.enableCommandMode ?? false,
+          commandModeShortcut:
+            storedSettings?.shortcuts?.commandModeShortcut ??
+            'CmdOrCtrl+Shift+Space',
         },
         system: {
           showInDock: storedSettings?.system?.showInDock ?? true,
@@ -247,6 +252,61 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       storeAnalytics.trackSettingChange('pasteShortcut', shortcut)
     } catch (error) {
       console.error('Error saving paste shortcut:', error)
+    }
+  },
+
+  setCommandModeShortcut: async (shortcut: string) => {
+    try {
+      const store = await getTauriStore()
+      const newSettings = {
+        ...get().settings,
+        shortcuts: {
+          ...get().settings.shortcuts,
+          commandModeShortcut: shortcut,
+        },
+      }
+      await store.set('settings', newSettings)
+      await store.save()
+      set({ settings: newSettings })
+
+      // Update the global shortcut registration if command mode is enabled
+      if (newSettings.shortcuts.enableCommandMode) {
+        await invoke('update_command_mode_shortcut', { shortcutStr: shortcut })
+      }
+      storeAnalytics.trackSettingChange('commandModeShortcut', shortcut)
+    } catch (error) {
+      console.error('Error saving command mode shortcut:', error)
+    }
+  },
+
+  setEnableCommandMode: async (enabled: boolean) => {
+    try {
+      const store = await getTauriStore()
+      const newSettings = {
+        ...get().settings,
+        shortcuts: {
+          ...get().settings.shortcuts,
+          enableCommandMode: enabled,
+        },
+      }
+      await store.set('settings', newSettings)
+      await store.save()
+      set({ settings: newSettings })
+
+      // Invalidate Rust cache
+      await invoke('invalidate_settings_cache')
+
+      // Register or unregister command mode shortcut
+      if (enabled) {
+        await invoke('register_command_mode_shortcut', {
+          shortcutStr: newSettings.shortcuts.commandModeShortcut,
+        })
+      } else {
+        await invoke('unregister_command_mode_shortcut')
+      }
+      storeAnalytics.trackSettingChange('enableCommandMode', enabled)
+    } catch (error) {
+      console.error('Error toggling command mode:', error)
     }
   },
 

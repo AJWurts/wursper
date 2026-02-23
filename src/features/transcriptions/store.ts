@@ -125,6 +125,36 @@ export const useTranscriptionsStore = create<TranscriptionsStore>(
         .slice(0, 5)
         .map(([code, count]) => ({ code, count }))
 
+      // Source type breakdown
+      const recordings = transcriptions.filter(
+        t => t.sourceType === 'recording'
+      )
+      const uploads = transcriptions.filter(t => t.sourceType === 'upload')
+      const commands = transcriptions.filter(t => t.sourceType === 'command')
+
+      // Today's breakdown
+      const todayRecordings = todayTranscriptions.filter(
+        t => t.sourceType === 'recording'
+      )
+      const todayCommands = todayTranscriptions.filter(
+        t => t.sourceType === 'command'
+      )
+
+      // Command stats - count words generated (from commandResult)
+      const commandWordsGenerated = commands.reduce((sum, t) => {
+        if (t.commandResult) {
+          return sum + t.commandResult.split(/\s+/).filter(Boolean).length
+        }
+        return sum
+      }, 0)
+
+      const todayCommandWordsGenerated = todayCommands.reduce((sum, t) => {
+        if (t.commandResult) {
+          return sum + t.commandResult.split(/\s+/).filter(Boolean).length
+        }
+        return sum
+      }, 0)
+
       return {
         totalTranscriptions: transcriptions.length,
         totalWords,
@@ -141,6 +171,25 @@ export const useTranscriptionsStore = create<TranscriptionsStore>(
           topLanguages,
           translatedCount,
           uniqueLanguages: Object.keys(languageCounts).length,
+        },
+        // Source breakdown
+        sourceStats: {
+          recordings: recordings.length,
+          uploads: uploads.length,
+          commands: commands.length,
+          todayRecordings: todayRecordings.length,
+          todayCommands: todayCommands.length,
+        },
+        // Command mode stats
+        commandStats: {
+          totalCommands: commands.length,
+          todayCommands: todayCommands.length,
+          wordsGenerated: commandWordsGenerated,
+          todayWordsGenerated: todayCommandWordsGenerated,
+          avgWordsPerCommand:
+            commands.length > 0
+              ? Math.round(commandWordsGenerated / commands.length)
+              : 0,
         },
       }
     },

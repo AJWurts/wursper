@@ -17,8 +17,9 @@ export function VoiceInputContainer({
   const isMinimal = mode === 'minimal'
 
   return (
-    <div className="flex h-full w-full items-center justify-center border rounded-full border-zinc-700">
+    <div className="flex h-full w-full items-end justify-center">
       <motion.div
+        layout
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{
@@ -28,13 +29,11 @@ export function VoiceInputContainer({
           mass: 0.8,
         }}
         className={cn(
-          'relative flex h-full w-full items-center justify-center rounded-full border border-white/12 bg-linear-to-br from-black via-neutral-950 to-black',
+          'relative flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-white/12 bg-gradient-to-br from-black via-neutral-950 to-black',
           isMinimal ? 'px-3' : 'gap-1.5 px-2.5'
         )}
       >
-        <div className="relative z-10 flex w-full items-center justify-center gap-2">
-          {children}
-        </div>
+        {children}
       </motion.div>
     </div>
   )

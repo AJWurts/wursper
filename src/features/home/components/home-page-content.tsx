@@ -100,7 +100,7 @@ export function HomePageContent() {
       )}
 
       {/* Transcription List */}
-      <div className="flex-1 overflow-y-auto pb-8">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-8">
         {transcriptions.length === 0 ? (
           <EmptyState />
         ) : filteredTranscriptions.length === 0 ? (

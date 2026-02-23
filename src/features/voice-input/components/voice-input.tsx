@@ -85,8 +85,8 @@ export const VoiceInput = () => {
             active={recording.isRecording}
             audioLevel={audioLevel}
             mode="static"
-            barWidth={3}
-            barGap={1}
+            barWidth={4}
+            barGap={1.5}
             barRadius={10}
             barColor="#ffffff"
             height={20}
@@ -114,13 +114,13 @@ const TranscriberProcessing = () => {
     <LiveWaveform
       active={false}
       processing
-      barWidth={1.5}
-      barGap={1}
-      barRadius={4}
+      barWidth={4}
+      barGap={1.5}
+      barRadius={10}
       barColor="#9ca3af"
       fadeEdges
       fadeWidth={20}
-      height={16}
+      height={24}
       className="w-full opacity-70"
     />
   )

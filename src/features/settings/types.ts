@@ -12,6 +12,8 @@ export interface SettingsStore {
   setAutoPaste: (enabled: boolean) => Promise<void>
   setAutoCopyToClipboard: (enabled: boolean) => Promise<void>
   setPasteShortcut: (shortcut: string) => Promise<void>
+  setCommandModeShortcut: (shortcut: string) => Promise<void>
+  setEnableCommandMode: (enabled: boolean) => Promise<void>
   setGlobalShortcutsEnabled: (enabled: boolean) => Promise<void>
   setShowInDock: (enabled: boolean) => Promise<void>
   setSaveAudioRecordings: (enabled: boolean) => Promise<void>

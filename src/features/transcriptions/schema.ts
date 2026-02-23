@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const sourceTypeSchema = z.enum(['recording', 'upload'])
+export const sourceTypeSchema = z.enum(['recording', 'upload', 'command'])
 
 export const transcriptionRecordSchema = z.object({
   id: z.string(),
@@ -15,6 +15,8 @@ export const transcriptionRecordSchema = z.object({
   originalFilename: z.string().optional().nullable(),
   translatedToEnglish: z.boolean().optional().default(false),
   language: z.string().optional().nullable(),
+  // For command mode: the generated content (text field contains the instruction)
+  commandResult: z.string().optional().nullable(),
 })
 
 export const transcriptionsStoreSchema = z.object({

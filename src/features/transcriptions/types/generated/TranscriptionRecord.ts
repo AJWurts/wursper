@@ -12,4 +12,8 @@ translatedToEnglish: boolean,
 /**
  * The language code of the original transcription
  */
-language: string | null, };
+language: string | null, 
+/**
+ * For command mode: the generated content (text field contains the instruction)
+ */
+commandResult: string | null, };

@@ -63,6 +63,10 @@ pub struct RecordingMetadata {
     // Original filename (for uploaded files)
     #[serde(default)]
     pub original_filename: Option<String>,
+
+    // Command mode: the generated content (instruction is stored in raw_result)
+    #[serde(default)]
+    pub command_result: Option<String>,
 }
 
 fn default_source_type() -> SourceType {
@@ -79,7 +83,8 @@ fn default_source_type() -> SourceType {
 pub enum SourceType {
     #[default]
     Recording, // Voice recording from microphone
-    Upload, // Uploaded audio file
+    Upload,  // Uploaded audio file
+    Command, // Command mode (voice command → generated content)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -244,6 +249,72 @@ impl RecordingMetadata {
             has_audio,
             source_type,
             original_filename,
+            command_result: None,
+        }
+    }
+
+    /// Create metadata for a command mode entry
+    #[allow(clippy::too_many_arguments)]
+    pub fn for_command(
+        instruction: String,
+        generated_content: String,
+        timestamp: i64,
+        duration: f64,
+        processing_time: u64,
+        model_key: String,
+        model_name: String,
+        provider: String,
+        post_processing_model_id: String,
+        post_processing_model_name: String,
+        post_processing_provider: String,
+        recording_device: String,
+    ) -> Self {
+        use chrono::prelude::*;
+
+        let datetime = DateTime::from_timestamp(timestamp / 1000, 0)
+            .unwrap_or_else(|| Utc::now())
+            .format("%Y-%m-%dT%H:%M:%S")
+            .to_string();
+
+        Self {
+            result: instruction.clone(), // The instruction shown in list
+            raw_result: instruction,
+            post_processed_result: None,
+            datetime: datetime.clone(),
+            duration,
+            processing_time,
+            model_key,
+            model_name,
+            provider,
+            post_processing_model_id: Some(post_processing_model_id),
+            post_processing_model_name: Some(post_processing_model_name),
+            post_processing_provider: Some(post_processing_provider),
+            language_selected: "en".to_string(),
+            translated_to_english: false,
+            recording_device,
+            post_processing_enabled: true,
+            style_applied: None,
+            style_category: None,
+            focused_app_name: String::new(),
+            focused_app_category: String::new(),
+            prompt_context: PromptContext {
+                vocabulary_used: vec![],
+                snippets_used: vec![],
+                vibe_prompt: None,
+                system_context: SystemContext {
+                    language: "en".to_string(),
+                    time: datetime,
+                },
+                application_context: ApplicationContext {
+                    name: String::new(),
+                    category: String::new(),
+                },
+            },
+            app_version: env!("CARGO_PKG_VERSION").to_string(),
+            has_audio: false,
+            source_type: SourceType::Command,
+            original_filename: None,
+            command_result: Some(generated_content),
         }
     }
 }

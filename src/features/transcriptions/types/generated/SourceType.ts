@@ -3,4 +3,4 @@
 /**
  * Source type for transcriptions
  */
-export type SourceType = "recording" | "upload";
+export type SourceType = "recording" | "upload" | "command";

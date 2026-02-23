@@ -21,6 +21,13 @@ pub struct PostProcessingRequest {
     pub vibe_prompt: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandModeRequest {
+    pub instruction: String,
+    pub model_id: String,
+}
+
 /// Main command to post-process a transcript using AI
 #[command]
 pub async fn post_process_transcript(
@@ -377,4 +384,165 @@ fn get_model_provider(model_id: &str) -> Result<String, String> {
     } else {
         Err(format!("Unable to determine provider from model ID: {}. Model ID should start with 'claude-' for Anthropic, 'gpt-' for OpenAI, or 'llm-' for local LLM.", model_id))
     }
+}
+
+/// Special marker returned by LLM when request is not appropriate for content generation
+pub const INVALID_REQUEST_MARKER: &str = "[[DICTA_INVALID_REQUEST]]";
+
+/// Build the system prompt for command mode
+fn build_command_mode_prompt() -> String {
+    format!(
+        r#"You are a content generation assistant for a voice-to-text app. Your ONLY job is to generate text content that the user will paste and use somewhere.
+
+CRITICAL - DETECTING INVALID REQUESTS:
+If the user asks a general knowledge question, trivia, or anything that is NOT about generating usable content, you MUST respond with EXACTLY this marker and nothing else:
+{marker}
+
+Examples of INVALID requests (respond with {marker}):
+- "Tell me about Albert Einstein"
+- "What's the capital of France?"
+- "How does photosynthesis work?"
+- "Who won the world cup?"
+- "What's the weather like?"
+- "Explain quantum physics"
+- Any question asking for information/facts rather than content generation
+
+VALID requests that you SHOULD fulfill:
+- "Write an email to..." → Generate the email
+- "Draft a message saying..." → Generate the message
+- "Create a to-do list for..." → Generate the list
+- "Write code that..." → Generate the code
+- "Summarize this for a report..." → Generate the summary
+- "Text my wife..." → Generate the text message
+- Any request asking you to CREATE/WRITE/DRAFT content
+
+CRITICAL RULES FOR VALID REQUESTS:
+1. Generate ONLY the requested content - no explanations, no meta-commentary
+2. Match the appropriate format (email, message, list, code, etc.)
+3. Use appropriate tone for the content type
+4. Start directly with the content - no prefixes like "Here's your email:" or "Sure, here is..."
+5. Be concise but complete
+
+CONTENT TYPE DETECTION:
+- "email" → Professional email with greeting and closing
+- "message" or "text" → Casual text message style
+- "list" or "to-do" → Bulleted list
+- "code" → Well-formatted code
+- "draft" or "write" → Clear, natural prose
+
+EXAMPLES:
+
+Instruction: "Write an email to John saying I'll be late to the meeting tomorrow"
+Output:
+Hi John,
+
+I wanted to let you know that I'll be running late to tomorrow's meeting. I apologize for any inconvenience this may cause.
+
+Best regards
+
+Instruction: "Create a to-do list for launching the new feature"
+Output:
+- Review feature requirements
+- Write unit tests
+- Implement core functionality
+- Perform code review
+- Deploy to staging
+- QA testing
+- Deploy to production
+
+Instruction: "Text my wife I'm on my way home"
+Output:
+Hey! On my way home now. See you soon!
+
+Instruction: "Tell me about the history of computers"
+Output:
+{marker}
+
+Now generate content for the user's instruction."#,
+        marker = INVALID_REQUEST_MARKER
+    )
+}
+
+/// Result from command mode generation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CommandModeResult {
+    /// Successfully generated content
+    Success(String),
+    /// Request was not appropriate for content generation (Q&A, trivia, etc.)
+    InvalidRequest,
+}
+
+/// Generate content from a spoken command/instruction
+pub async fn generate_from_command(
+    request: CommandModeRequest,
+    app: AppHandle,
+) -> Result<CommandModeResult, String> {
+    log::info!("Command mode: generating content from instruction");
+    log::debug!("Instruction: {}", request.instruction);
+
+    // Determine provider from model_id
+    let provider = get_model_provider(&request.model_id)?;
+
+    let system_prompt = build_command_mode_prompt();
+
+    // Route to appropriate provider
+    let generated_text = match provider.as_str() {
+        "anthropic" | "anthropic-chat" => {
+            let api_key = crate::features::security::get_api_key_internal(&app, &request.model_id)
+                .await
+                .map_err(|_| {
+                    "API key not found for selected model. Please add your API key in settings."
+                        .to_string()
+                })?;
+
+            providers::process_with_anthropic(
+                request.instruction,
+                system_prompt,
+                api_key,
+                request.model_id,
+            )
+            .await?
+        }
+        "openai" | "openai-chat" => {
+            let api_key = crate::features::security::get_api_key_internal(&app, &request.model_id)
+                .await
+                .map_err(|_| {
+                    "API key not found for selected model. Please add your API key in settings."
+                        .to_string()
+                })?;
+
+            providers::process_with_openai(
+                request.instruction,
+                system_prompt,
+                api_key,
+                request.model_id,
+            )
+            .await?
+        }
+        "local-llm" => {
+            local_llm::process_with_local_llm(
+                request.instruction,
+                system_prompt,
+                request.model_id,
+                app,
+            )
+            .await?
+        }
+        _ => {
+            return Err(format!(
+                "Unsupported AI model provider for command mode: {}",
+                provider
+            ))
+        }
+    };
+
+    // Check if the response indicates an invalid request
+    if generated_text.trim().contains(INVALID_REQUEST_MARKER) {
+        log::info!("Command mode: detected invalid request (Q&A/trivia question)");
+        return Ok(CommandModeResult::InvalidRequest);
+    }
+
+    log::info!("Command mode: content generated successfully");
+    Ok(CommandModeResult::Success(generated_text))
 }

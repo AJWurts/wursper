@@ -2,10 +2,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tauri::{command, AppHandle, Emitter, State};
+use tauri::{command, AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
+use crate::features::ai_processing::{generate_from_command, CommandModeRequest};
+use crate::features::audio::{RecordingMode, RecordingState, RecordingStateManager};
 use crate::features::clipboard;
 use crate::features::models::LocalModelManager;
 use crate::features::security;
@@ -18,7 +20,9 @@ use super::orchestrator_helpers::{
 use super::providers::{assemblyai, azure, deepgram, elevenlabs, google, local_whisper, openai};
 use super::vocabulary::get_transcription_context;
 use crate::features::recordings::metadata::RecordingMetadata;
-use crate::features::recordings::storage::{get_all_recordings, read_metadata, save_metadata};
+use crate::features::recordings::storage::{
+    create_recording_folder, get_all_recordings, read_metadata, save_metadata,
+};
 
 // Global state for debouncing paste operations (using parking_lot for faster locking)
 static LAST_PASTE_TIME: parking_lot::Mutex<Option<Instant>> = parking_lot::Mutex::new(None);
@@ -120,6 +124,179 @@ pub async fn transcribe_and_process(
         logger::debug("Transcription is empty, skipping");
         return Ok(None);
     }
+
+    // Step 4.5: Check recording mode (Command Mode or Dictation Mode)
+    let state_manager = app.state::<Arc<RecordingStateManager>>();
+    let recording_mode = state_manager.get_recording_mode();
+
+    // Handle Command Mode
+    if recording_mode == RecordingMode::Command {
+        use crate::features::ai_processing::CommandModeResult;
+
+        log::info!("Command Mode: Processing transcription as instruction");
+
+        // Hide pill window first
+        crate::features::window::hide_pill_window(&app);
+
+        // Show command result window with transcription
+        if let Err(e) =
+            crate::features::window::show_command_result_window(&app, &raw_transcription)
+        {
+            log::warn!("Failed to show command result window: {}", e);
+        }
+
+        // Transition to Generating state
+        if let Err(e) = state_manager.set_state(RecordingState::Generating) {
+            log::warn!("Failed to transition to Generating state: {}", e);
+        }
+        app.emit("recording-state-changed", "generating")
+            .map_err(|e| format!("Failed to emit state change: {}", e))?;
+
+        // Get the post-processing model for command generation
+        let settings = get_settings(&app)?;
+        let post_processing_model_id = settings
+            .get("aiProcessing")
+            .and_then(|a| a.get("postProcessingModelId"))
+            .and_then(|v| v.as_str())
+            .ok_or("Command Mode requires AI processing to be enabled with a model selected")?;
+
+        // Generate content using transcription as instruction
+        let command_result = generate_from_command(
+            CommandModeRequest {
+                instruction: raw_transcription.clone(),
+                model_id: post_processing_model_id.to_string(),
+            },
+            app.clone(),
+        )
+        .await?;
+
+        // Reset recording mode back to Dictation for next use
+        state_manager.set_recording_mode(RecordingMode::Dictation);
+
+        // Reset state to Idle and emit state change
+        if let Err(e) = state_manager.set_state(RecordingState::Idle) {
+            log::warn!("Failed to reset state to Idle: {}", e);
+            state_manager.force_set_state(RecordingState::Idle);
+        }
+        app.emit("recording-state-changed", "idle")
+            .map_err(|e| format!("Failed to emit state change: {}", e))?;
+
+        // Handle the command result
+        match command_result {
+            CommandModeResult::InvalidRequest => {
+                log::info!("Command Mode: Invalid request detected, showing error");
+
+                // Emit error event to command result window
+                app.emit("command-result-error", "This doesn't look like a content request. Try asking me to write, draft, or create something.")
+                    .map_err(|e| format!("Failed to emit error: {}", e))?;
+
+                // Keep window open for 3 seconds to show error, then hide
+                let app_clone = app.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(5000));
+                    if let Err(e) = crate::features::window::hide_command_result_window(&app_clone)
+                    {
+                        log::warn!("Failed to hide command result window: {}", e);
+                    }
+                });
+
+                // Return None - no content was generated
+                return Ok(None);
+            }
+            CommandModeResult::Success(generated_content) => {
+                // Calculate processing time
+                let processing_time = start_time.elapsed().as_millis() as u64;
+
+                // Create recording folder for command mode entry
+                let recording_folder = create_recording_folder(&app, request.timestamp)?;
+
+                // Use model ID as name (simplified - could be enhanced later)
+                let post_processing_model_name = post_processing_model_id.to_string();
+
+                // Determine post-processing provider from model_id
+                let post_processing_provider = if post_processing_model_id.starts_with("claude-") {
+                    "anthropic"
+                } else if post_processing_model_id.starts_with("gpt-") {
+                    "openai"
+                } else {
+                    "local-llm"
+                };
+
+                // Create and save metadata for command mode
+                let metadata = RecordingMetadata::for_command(
+                    raw_transcription.clone(),
+                    generated_content.clone(),
+                    request.timestamp,
+                    request.duration.unwrap_or(0.0) * 1000.0,
+                    processing_time,
+                    selected_model.id.clone(),
+                    get_model_name(&selected_model),
+                    selected_model.provider.clone(),
+                    post_processing_model_id.to_string(),
+                    post_processing_model_name,
+                    post_processing_provider.to_string(),
+                    request
+                        .recording_device
+                        .clone()
+                        .unwrap_or_else(|| "Unknown".to_string()),
+                );
+
+                // Save metadata
+                if let Err(e) = save_metadata(&recording_folder, &metadata) {
+                    log::warn!("Failed to save command mode metadata: {}", e);
+                }
+
+                // Handle auto-paste for command mode
+                let auto_paste = settings
+                    .get("transcription")
+                    .and_then(|t| t.get("autoPaste"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                // Hide command result window
+                if let Err(e) = crate::features::window::hide_command_result_window(&app) {
+                    log::warn!("Failed to hide command result window: {}", e);
+                }
+
+                if auto_paste {
+                    if let Err(e) = clipboard::copy_and_paste(generated_content.clone()).await {
+                        logger::error(&format!("Failed to copy and paste: {}", e));
+                    }
+                } else {
+                    // Copy to clipboard
+                    use tauri_plugin_clipboard_manager::ClipboardExt;
+                    if let Err(e) = app.clipboard().write_text(generated_content.clone()) {
+                        logger::error(&format!("Failed to copy to clipboard: {}", e));
+                    }
+                }
+
+                // Show success toast
+                let _ = crate::features::window::show_toast(
+                    &app,
+                    "Content generated",
+                    crate::features::window::ToastType::Success,
+                    0.4,
+                );
+
+                // Emit event for UI updates
+                app.emit("transcriptions-changed", ())
+                    .map_err(|e| format!("Failed to emit sync event: {}", e))?;
+
+                // Return record
+                return Ok(Some(TranscriptionRecord {
+                    id: request.timestamp.to_string(),
+                    text: generated_content,
+                    timestamp: request.timestamp,
+                    duration: request.duration,
+                    word_count: raw_transcription.split_whitespace().count(),
+                    model_id: selected_model.id,
+                    provider: selected_model.provider,
+                }));
+            }
+        }
+    }
+
+    // --- Dictation Mode (default) ---
 
     // Step 5: Get the existing recording folder (already created during start_recording)
     let recordings_dir = crate::features::recordings::get_recordings_dir(&app)?;

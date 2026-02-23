@@ -45,11 +45,11 @@ impl PillWindowConfig {
 /// Screen frame data extracted from NSScreen
 #[cfg(target_os = "macos")]
 #[derive(Debug, Clone, Copy)]
-struct ScreenFrame {
-    origin_x: f64,
-    origin_y: f64,
-    width: f64,
-    height: f64,
+pub(crate) struct ScreenFrame {
+    pub origin_x: f64,
+    pub origin_y: f64,
+    pub width: f64,
+    pub height: f64,
 }
 
 #[cfg(target_os = "macos")]
@@ -64,11 +64,11 @@ impl ScreenFrame {
 
 /// Result of screen query operations
 #[cfg(target_os = "macos")]
-struct ScreenQueryResult {
-    main_screen_frame: ScreenFrame,
-    target_visible_frame: ScreenFrame,
-    mouse_x: f64,
-    mouse_y: f64,
+pub(crate) struct ScreenQueryResult {
+    pub main_screen_frame: ScreenFrame,
+    pub target_visible_frame: ScreenFrame,
+    pub mouse_x: f64,
+    pub mouse_y: f64,
 }
 
 /// Safely query screen information on the main thread.
@@ -78,7 +78,7 @@ struct ScreenQueryResult {
 /// - new_unchecked() violates safety contract when not on main thread
 /// - Callers must handle None gracefully (use default position)
 #[cfg(target_os = "macos")]
-fn query_screen_info_for_mouse() -> Option<ScreenQueryResult> {
+pub(crate) fn query_screen_info_for_mouse() -> Option<ScreenQueryResult> {
     use objc2::MainThreadMarker;
     use objc2_app_kit::{NSEvent, NSScreen};
 
@@ -281,6 +281,90 @@ pub fn configure_pill_window_for_mode(
     );
 
     Ok(())
+}
+
+/// Resize the pill window for expanded state (Command Mode).
+///
+/// When expanded=true, the window expands to show the transcription and generating indicator.
+/// The bottom edge stays stable (anchored) and the window grows upward.
+/// When expanded=false, the window returns to the recording size.
+#[cfg(target_os = "macos")]
+pub fn resize_pill_window_expanded(app: &AppHandle, expanded: bool) -> tauri::Result<()> {
+    use tauri::Manager;
+
+    let window = app
+        .get_webview_window("voice-input")
+        .ok_or_else(|| tauri::Error::WindowNotFound)?;
+
+    // Sizes for expanded and recording states
+    let (width, height) = if expanded {
+        (320.0, 200.0) // Expanded: show transcription + generating indicator
+    } else {
+        (240.0, 40.0) // Recording: standard pill size
+    };
+
+    // Query screen info to calculate position (if on main thread)
+    if let Some(screen_info) = query_screen_info_for_mouse() {
+        // Calculate position to keep bottom stable
+        // The visible_frame.origin_y is the bottom of the visible area (above dock)
+        // We want the window bottom to be at origin_y + 16 (padding above dock)
+        let bottom_padding = 16.0;
+        let target_bottom_y = screen_info.target_visible_frame.origin_y + bottom_padding;
+
+        // In macOS coordinate system (origin at bottom-left), window y is the bottom of the window
+        // But Tauri uses top-left origin, so we need to convert
+        // The main_screen_frame gives us the full screen height for conversion
+        let screen_height = screen_info.main_screen_frame.height;
+
+        // Convert from Cocoa (bottom-left) to Tauri (top-left) coordinates
+        // In Tauri: y = 0 is at top of screen
+        // pos_y should be where the TOP of the window is
+        // We want: window_bottom = target_bottom_y (in Cocoa coords)
+        // window_top = window_bottom + height (in Cocoa coords)
+        // In Tauri coords: pos_y = screen_height - window_top
+        let window_top_cocoa = target_bottom_y + height;
+        let pos_y = screen_height - window_top_cocoa;
+
+        let pos_x = screen_info.target_visible_frame.origin_x
+            + (screen_info.target_visible_frame.width - width) / 2.0;
+
+        // First move the window to the new position, then resize
+        // This creates the illusion of the bottom staying stable
+        window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
+            x: pos_x,
+            y: pos_y,
+        }))?;
+    }
+
+    // Resize window
+    window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }))?;
+
+    log::debug!(
+        "Resized pill window to {} state: {}x{}",
+        if expanded { "expanded" } else { "recording" },
+        width,
+        height
+    );
+
+    Ok(())
+}
+
+/// Stub for non-macOS platforms
+#[cfg(not(target_os = "macos"))]
+pub fn resize_pill_window_expanded(_app: &AppHandle, _expanded: bool) -> tauri::Result<()> {
+    Ok(())
+}
+
+/// Hide the pill window and deactivate the position monitor.
+pub fn hide_pill_window(app: &AppHandle) {
+    use tauri::Manager;
+
+    if let Some(window) = app.get_webview_window("voice-input") {
+        let _ = window.hide();
+        log::debug!("Pill window hidden");
+    }
+
+    set_pill_monitor_active(false);
 }
 
 /// Query all screen visible frames safely.

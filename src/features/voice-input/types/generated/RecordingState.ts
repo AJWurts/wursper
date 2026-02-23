@@ -4,7 +4,7 @@
  * Recording state machine
  *
  * The state transitions are validated to ensure correct operation:
- * - Idle -> Starting -> Recording -> Stopping -> Transcribing -> Idle
+ * - Idle -> Starting -> Recording -> Stopping -> Transcribing -> [Generating] -> Idle
  * - Error can be entered from any state and recovered from
  */
-export type RecordingState = "idle" | "starting" | "recording" | "stopping" | "transcribing" | "error";
+export type RecordingState = "idle" | "starting" | "recording" | "stopping" | "transcribing" | "generating" | "error";
