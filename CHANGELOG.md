@@ -1,3 +1,14 @@
+# [0.1.0](https://github.com/nitintf/dicta/compare/v0.0.9...v0.1.0) (2026-02-23)
+
+
+### Features
+
+* add cloud STT providers and vocabulary support UI ([6cbcab1](https://github.com/nitintf/dicta/commit/6cbcab1003498dafec5239d6721b210ce127b481))
+* add command mode with dedicated result window ([e18fce5](https://github.com/nitintf/dicta/commit/e18fce59ba025027e32409446e2497a255adc651))
+* new voice iinput window ui and some minor optimizations ([92dad79](https://github.com/nitintf/dicta/commit/92dad79034ef439224489890a839c1451e00940e))
+
+
+
 ## [0.0.9](https://github.com/nitintf/dicta/compare/v0.0.8...v0.0.9) (2026-02-21)
 
 
