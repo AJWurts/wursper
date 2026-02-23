@@ -35,21 +35,57 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     ],
   },
 
-  // AssemblyAI
+  // AssemblyAI Universal-2
   'assemblyai-best': {
     accuracy: 'high',
-    speed: 'medium',
-    languages: 30,
+    speed: 'fast',
+    languages: 99,
     features: [
-      'Speaker detection',
+      'Word boost for vocabulary',
+      'Speaker diarization',
       'Sentiment analysis',
       'Auto highlights',
-      'Content moderation',
     ],
     bestFor: [
       'Podcast transcription',
       'Interview analysis',
       'Content creation',
+    ],
+  },
+
+  // Deepgram Nova-2
+  'deepgram-nova-2': {
+    accuracy: 'high',
+    speed: 'fast',
+    languages: 36,
+    features: [
+      'Lowest word error rate (8.4%)',
+      'Keyword boosting',
+      'Smart formatting',
+      'Punctuation & capitalization',
+    ],
+    bestFor: [
+      'Real-time transcription',
+      'Call center analytics',
+      'Fast turnaround',
+    ],
+  },
+
+  // Azure Speech Services
+  'azure-speech': {
+    accuracy: 'high',
+    speed: 'fast',
+    languages: 100,
+    features: [
+      'Phrase lists for vocabulary',
+      'Custom speech models',
+      'Speaker diarization',
+      'Real-time & batch',
+    ],
+    bestFor: [
+      'Enterprise deployments',
+      'Microsoft ecosystem',
+      'Custom acoustic models',
     ],
   },
 

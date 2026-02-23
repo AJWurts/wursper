@@ -440,6 +440,7 @@ impl LocalModelEngine for CandleWhisperEngine {
         audio_data: Vec<u8>,
         language: Option<String>,
         _translate: bool,
+        _initial_prompt: Option<String>,
     ) -> Result<String, String> {
         if self.status != ModelStatus::Ready {
             return Err("Candle engine is not ready".to_string());
@@ -449,7 +450,8 @@ impl LocalModelEngine for CandleWhisperEngine {
         let samples = Self::convert_audio_to_samples(audio_data)?;
 
         // Perform transcription
-        // Note: translate parameter not yet implemented for Candle engine
+        // Note: translate and initial_prompt parameters not yet implemented for Candle engine
+        // The Candle Whisper implementation is simplified and doesn't support prompts
         self.transcribe_internal(samples, language)
     }
 

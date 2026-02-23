@@ -29,6 +29,10 @@ pub enum ModelProvider {
     Google,
     #[serde(rename = "assemblyai")]
     AssemblyAI,
+    #[serde(rename = "deepgram")]
+    Deepgram,
+    #[serde(rename = "azure")]
+    Azure,
     #[serde(rename = "elevenlabs")]
     ElevenLabs,
     #[serde(rename = "local-whisper")]
@@ -87,27 +91,71 @@ pub struct ModelDefinition {
     pub is_recommended: bool,
     /// Language support for STT models (None for post-processing models)
     pub language_support: Option<LanguageSupport>,
+    /// Cost per hour (for display purposes)
+    pub cost_per_hour: Option<String>,
+    /// Number of languages supported (for display)
+    pub languages_count: Option<String>,
+    /// Whether this model supports vocabulary/phrase hints
+    #[serde(default)]
+    pub supports_vocabulary: bool,
 }
 
 // Speech-to-Text cloud models
-const STT_CLOUD_MODELS: &[(&str, &str, &str, &str)] = &[
+// Format: (id, name, provider, description, cost_per_hour, languages, supports_vocab)
+const STT_CLOUD_MODELS: &[(&str, &str, &str, &str, &str, &str, bool)] = &[
     (
         "whisper-1",
         "Whisper",
         "openai",
         "OpenAI Whisper - Fast and accurate speech recognition",
+        "$0.36/hr",
+        "99+ languages",
+        true, // Supports prompt parameter
     ),
     (
         "google-cloud-speech",
         "Cloud Speech-to-Text",
         "google",
         "Google Cloud Speech-to-Text API - High accuracy transcription",
+        "$0.96/hr",
+        "125+ languages",
+        true, // Supports speechContexts
     ),
     (
         "scribe_v1",
         "Scribe V1",
         "elevenlabs",
         "ElevenLabs Scribe - High-quality speech-to-text with multilingual support",
+        "$0.50/hr",
+        "99+ languages",
+        false, // No vocabulary support
+    ),
+    (
+        "assemblyai-best",
+        "Universal-2",
+        "assemblyai",
+        "AssemblyAI Universal-2 - Best-in-class accuracy with word boost",
+        "$0.27/hr",
+        "99+ languages",
+        true, // Supports word_boost
+    ),
+    (
+        "deepgram-nova-2",
+        "Nova-2",
+        "deepgram",
+        "Deepgram Nova-2 - Fastest transcription with 8.4% WER",
+        "$0.26/hr",
+        "35+ languages",
+        true, // Supports keywords
+    ),
+    (
+        "azure-speech",
+        "Azure Speech",
+        "azure",
+        "Microsoft Azure Speech - Enterprise-grade with phrase lists",
+        "$0.36/hr",
+        "100+ languages",
+        true, // Supports phrase lists
     ),
 ];
 
@@ -341,7 +389,7 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
     let mut models = Vec::new();
 
     // Add speech-to-text cloud models
-    for (id, name, provider, description) in STT_CLOUD_MODELS {
+    for (id, name, provider, description, cost, languages, supports_vocab) in STT_CLOUD_MODELS {
         models.push(ModelDefinition {
             id: id.to_string(),
             name: name.to_string(),
@@ -349,6 +397,8 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
                 "openai" => ModelProvider::OpenAI,
                 "google" => ModelProvider::Google,
                 "assemblyai" => ModelProvider::AssemblyAI,
+                "deepgram" => ModelProvider::Deepgram,
+                "azure" => ModelProvider::Azure,
                 "elevenlabs" => ModelProvider::ElevenLabs,
                 _ => continue,
             },
@@ -363,9 +413,12 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             description: Some(description.to_string()),
             download_url: None,
             filename: None,
-            is_recommended: false,
+            is_recommended: *id == "assemblyai-best", // AssemblyAI is recommended for best accuracy
             // All cloud STT models support multiple languages
             language_support: Some(LanguageSupport::Multilingual),
+            cost_per_hour: Some(cost.to_string()),
+            languages_count: Some(languages.to_string()),
+            supports_vocabulary: *supports_vocab,
         });
     }
 
@@ -390,9 +443,12 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             description: Some(description.to_string()),
             download_url: None,
             filename: None,
-            is_recommended: false,
+            is_recommended: *id == "claude-3-5-sonnet-20241022",
             // Post-processing models don't have language support (not STT)
             language_support: None,
+            cost_per_hour: None,
+            languages_count: None,
+            supports_vocabulary: false, // N/A for post-processing
         });
     }
 
@@ -466,6 +522,13 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             filename: Some(filename),
             is_recommended,
             language_support: Some(language_support),
+            cost_per_hour: Some("Free".to_string()),
+            languages_count: if name.ends_with(".en") {
+                Some("English only".to_string())
+            } else {
+                Some("99+ languages".to_string())
+            },
+            supports_vocabulary: true, // Local Whisper supports initial_prompt
         });
     }
 
@@ -638,6 +701,9 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
             is_recommended,
             // Post-processing models don't have language support (not STT)
             language_support: None,
+            cost_per_hour: Some("Free".to_string()),
+            languages_count: None,
+            supports_vocabulary: false, // N/A for post-processing
         });
     }
 

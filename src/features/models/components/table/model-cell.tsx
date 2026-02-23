@@ -1,4 +1,4 @@
-import { Star } from 'lucide-react'
+import { Star, Zap } from 'lucide-react'
 
 import {
   Tooltip,
@@ -25,6 +25,8 @@ export function ModelCell({ model }: ModelCellProps) {
   const isPostProcessing = model.purpose === 'post-processing'
   const sttCapabilities = getModelCapabilities(model.id)
   const ppCapabilities = getPostProcessingCapabilities(model.id)
+  const isSTT = model.purpose === 'speech-to-text'
+  const supportsVocabulary = model.supportsVocabulary ?? false
 
   return (
     <div className="flex items-center gap-2">
@@ -45,6 +47,24 @@ export function ModelCell({ model }: ModelCellProps) {
                 showArrow={false}
               >
                 Recommended
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {isSTT && supportsVocabulary && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Zap className="h-3 w-3 flex-shrink-0 fill-amber-500 text-amber-500" />
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                className="text-xs bg-popover text-popover-foreground border border-border shadow-xl max-w-[220px]"
+                showArrow={false}
+              >
+                <p className="font-medium mb-1">Word boost supported</p>
+                <p className="text-muted-foreground">
+                  This model uses your vocabulary words to improve transcription
+                  accuracy.
+                </p>
               </TooltipContent>
             </Tooltip>
           )}

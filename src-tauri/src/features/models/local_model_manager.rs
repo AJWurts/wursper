@@ -121,6 +121,7 @@ impl LocalModelManager {
     /// * `audio_data` - Raw audio data
     /// * `language` - Optional language code
     /// * `translate` - If true, translate output to English (Whisper-specific)
+    /// * `initial_prompt` - Optional vocabulary/context prompt for better accuracy
     ///
     /// # Returns
     /// * `Ok(String)` containing the transcription
@@ -130,6 +131,7 @@ impl LocalModelManager {
         audio_data: Vec<u8>,
         language: Option<String>,
         translate: bool,
+        initial_prompt: Option<String>,
     ) -> Result<String, String> {
         let active = self
             .active_engine
@@ -141,7 +143,7 @@ impl LocalModelManager {
             .get_mut(active)
             .ok_or("Active engine not found")?;
 
-        engine.transcribe(audio_data, language, translate)
+        engine.transcribe(audio_data, language, translate, initial_prompt)
     }
 
     /// Get the current status of the active engine

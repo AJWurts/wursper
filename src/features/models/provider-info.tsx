@@ -68,15 +68,25 @@ export const getProviderInfo = (
       return {
         name: 'AssemblyAI',
         icon: (
-          <img
+          <LocalIcon
+            src="/icons/assemblyai.svg"
             alt="AssemblyAI"
-            className="size-5 flex-shrink-0 dark:invert"
-            height={20}
-            src="https://models.dev/logos/assemblyai.svg"
-            width={20}
+            invert={false}
           />
         ),
         color: 'text-indigo-600',
+      }
+    case 'deepgram':
+      return {
+        name: 'Deepgram',
+        icon: <LocalIcon src="/icons/deepgram.svg" alt="Deepgram" />,
+        color: 'text-emerald-600',
+      }
+    case 'azure':
+      return {
+        name: 'Azure',
+        icon: <LocalIcon src="/icons/azure.svg" alt="Azure" invert={false} />,
+        color: 'text-blue-500',
       }
     case 'elevenlabs':
       return {

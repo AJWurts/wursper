@@ -51,6 +51,7 @@ fn _convert_audio_to_samples(audio_data: Vec<u8>) -> Result<Vec<f32>, String> {
 /// * `model` - Model name (currently ignored, uses loaded model)
 /// * `language` - Optional language code (e.g., "en", "es")
 /// * `translate` - If true, translate output to English
+/// * `initial_prompt` - Optional vocabulary/context prompt for better accuracy
 /// * `state` - Shared LocalModelManager state
 #[command]
 pub async fn transcribe_with_local_whisper(
@@ -58,6 +59,7 @@ pub async fn transcribe_with_local_whisper(
     model: Option<String>,
     language: Option<String>,
     translate: bool,
+    initial_prompt: Option<String>,
     state: State<'_, Arc<Mutex<LocalModelManager>>>,
 ) -> Result<TranscriptionResponse, String> {
     // Note: The model parameter is kept for API compatibility but not used
@@ -68,7 +70,7 @@ pub async fn transcribe_with_local_whisper(
     // The LocalModelManager handles audio conversion internally
     let mut manager = state.lock().await;
     let text = manager
-        .transcribe(audio_data, language.clone(), translate)
+        .transcribe(audio_data, language.clone(), translate, initial_prompt)
         .map_err(|e| e.to_string())?;
 
     Ok(TranscriptionResponse {
@@ -90,6 +92,7 @@ pub async fn transcribe_with_local_whisper(
 /// * `model_id` - Model identifier
 /// * `language` - Optional language code (e.g., "en", "es")
 /// * `translate` - If true, translate output to English
+/// * `initial_prompt` - Optional vocabulary/context prompt for better accuracy
 /// * `state` - Shared LocalModelManager state
 pub async fn transcribe_with_local_engine(
     audio_data: Vec<u8>,
@@ -98,6 +101,7 @@ pub async fn transcribe_with_local_engine(
     model_id: Option<String>,
     language: Option<String>,
     translate: bool,
+    initial_prompt: Option<String>,
     state: State<'_, Arc<Mutex<LocalModelManager>>>,
 ) -> Result<TranscriptionResponse, String> {
     let mut manager = state.lock().await;
@@ -129,7 +133,7 @@ pub async fn transcribe_with_local_engine(
 
     // Transcribe using the loaded engine
     let text = manager
-        .transcribe(audio_data, language.clone(), translate)
+        .transcribe(audio_data, language.clone(), translate, initial_prompt)
         .map_err(|e| e.to_string())?;
 
     Ok(TranscriptionResponse {

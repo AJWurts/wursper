@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { VocabularySupportBanner } from '@/components/ui/feature-banner'
 
 import { VocabularyDialog } from '../components/vocabulary-dialog'
 import { useVocabularyStore } from '../store'
@@ -47,9 +48,9 @@ export function VocabularyPage() {
 
   return (
     <>
-      <div className="h-full p-8 pt-16 pb-16">
+      <div className="h-full flex flex-col p-8 pt-16">
         {/* Header */}
-        <div className="mb-8">
+        <div className="shrink-0 mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-medium tracking-tight text-foreground">
@@ -70,7 +71,7 @@ export function VocabularyPage() {
         </div>
 
         {/* Content */}
-        <div>
+        <div className="flex-1 overflow-y-auto">
           {words.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 px-4">
               <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted/60 mb-4">
@@ -120,6 +121,9 @@ export function VocabularyPage() {
             </div>
           )}
         </div>
+
+        {/* Bottom Banner */}
+        <VocabularySupportBanner className="shrink-0 mt-6" />
       </div>
 
       <VocabularyDialog

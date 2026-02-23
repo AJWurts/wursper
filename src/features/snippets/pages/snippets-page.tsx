@@ -2,6 +2,7 @@ import { SquareBottomDashedScissors, Plus, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { SnippetsSupportBanner } from '@/components/ui/feature-banner'
 
 import { SnippetDialog } from '../components/snippet-dialog'
 import { useSnippetsStore } from '../store'
@@ -62,7 +63,7 @@ export function SnippetsPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto pb-8">
+      <div className="flex-1 overflow-y-auto">
         {snippets.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 px-4">
             <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted/60 mb-4">
@@ -120,6 +121,9 @@ export function SnippetsPage() {
           </div>
         )}
       </div>
+
+      {/* Bottom Banner */}
+      <SnippetsSupportBanner className="shrink-0 mt-6 mb-8" />
 
       <SnippetDialog
         open={dialogOpen}

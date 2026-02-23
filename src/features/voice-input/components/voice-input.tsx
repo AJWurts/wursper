@@ -77,7 +77,7 @@ export const VoiceInput = () => {
         />
       )}
 
-      <div className="flex-1 flex items-center justify-center h-full overflow-hidden">
+      <div className="flex-1 flex items-center justify-center h-full overflow-hidden min-w-0">
         {isProcessing ? (
           <TranscriberProcessing />
         ) : (

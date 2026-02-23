@@ -60,11 +60,13 @@ pub trait LocalModelEngine: Send + Sync {
     /// * `audio_data` - Raw audio data
     /// * `language` - Optional input language code (e.g., "en", "hi", "fr")
     /// * `translate` - If true, translate to English (Whisper-specific)
+    /// * `initial_prompt` - Optional prompt with vocabulary/context for better accuracy
     fn transcribe(
         &mut self,
         audio_data: Vec<u8>,
         language: Option<String>,
         translate: bool,
+        initial_prompt: Option<String>,
     ) -> Result<String, String>;
 
     /// Get current status of the engine

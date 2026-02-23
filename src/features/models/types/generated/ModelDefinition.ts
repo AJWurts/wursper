@@ -25,4 +25,16 @@ isRecommended: boolean,
 /**
  * Language support for STT models (None for post-processing models)
  */
-languageSupport: LanguageSupport | null, };
+languageSupport: LanguageSupport | null, 
+/**
+ * Cost per hour (for display purposes)
+ */
+costPerHour: string | null, 
+/**
+ * Number of languages supported (for display)
+ */
+languagesCount: string | null, 
+/**
+ * Whether this model supports vocabulary/phrase hints
+ */
+supportsVocabulary: boolean, };

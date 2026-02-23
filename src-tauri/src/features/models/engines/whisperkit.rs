@@ -79,6 +79,7 @@ impl LocalModelEngine for WhisperKitEngine {
         _audio_data: Vec<u8>,
         _language: Option<String>,
         _translate: bool,
+        _initial_prompt: Option<String>,
     ) -> Result<String, String> {
         if self.status != ModelStatus::Ready {
             return Err("WhisperKit engine is not ready".to_string());

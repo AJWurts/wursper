@@ -33,7 +33,6 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
     if (!isInitialized) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsInitialized(true)
-      console.log('[Analytics] Tauri PostHog plugin ready')
     }
   }, [settingsInitialized, isInitialized])
 
@@ -51,10 +50,6 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
           app_version: APP_VERSION,
           platform: 'macos',
         })
-        console.log(
-          '[Analytics] Device identified:',
-          deviceId.slice(0, 8) + '...'
-        )
       } catch (error) {
         console.error('[Analytics] Failed to identify device:', error)
       }
@@ -75,12 +70,8 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
         // Always opt out in development mode
         if (IS_DEVELOPMENT || !analyticsEnabled) {
           posthogInstance.opt_out_capturing()
-          console.log(
-            '[Analytics] Capturing disabled (dev mode or user opt-out)'
-          )
         } else {
           posthogInstance.opt_in_capturing()
-          console.log('[Analytics] Capturing enabled')
         }
       } catch (error) {
         console.error('[Analytics] Failed to update opt status:', error)

@@ -1,3 +1,6 @@
+pub mod assemblyai;
+pub mod azure;
+pub mod deepgram;
 pub mod elevenlabs;
 pub mod google;
 pub mod local_whisper;

@@ -135,7 +135,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_posthog::init(PostHogConfig {
-            api_key: option_env!("VITE_POSTHOG_KEY").unwrap_or("").to_string(),
+            api_key: "phc_JbGCteuLKzFMg8YYUTMPNvup2iRyytw2DAqET76DUIM".to_string(),
             api_host: "https://us.i.posthog.com".to_string(),
             options: Some(PostHogOptions {
                 disable_session_recording: Some(true),

@@ -22,7 +22,8 @@ use crate::features::recordings::storage::{
 use crate::utils::logger;
 
 use super::orchestrator_helpers::apply_ai_post_processing;
-use super::providers::{elevenlabs, google, local_whisper, openai};
+use super::providers::{assemblyai, azure, deepgram, elevenlabs, google, local_whisper, openai};
+use super::vocabulary::get_transcription_context;
 
 /// Request for uploading and transcribing an audio file
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -338,6 +339,15 @@ async fn transcribe_with_provider(
         ));
     }
 
+    // Get vocabulary and snippets context for transcription providers
+    let vocab_context = get_transcription_context(app);
+    let prompt = vocab_context.to_prompt();
+    let word_list = if vocab_context.is_empty() {
+        None
+    } else {
+        Some(vocab_context.to_word_list())
+    };
+
     let response = match model.provider.as_str() {
         "openai" => {
             let api_key = crate::features::security::get_api_key_internal(app, &model.id)
@@ -350,6 +360,7 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language,
                 filename,
+                prompt.clone(),
             )
             .await?
         }
@@ -362,7 +373,8 @@ async fn transcribe_with_provider(
                 .map(|lang| format!("{}-US", lang.to_uppercase()))
                 .or(Some("en-US".to_string()));
 
-            google::transcribe_with_google(audio_data, api_key, google_language).await?
+            google::transcribe_with_google(audio_data, api_key, google_language, word_list.clone())
+                .await?
         }
         "local-whisper" => {
             local_whisper::transcribe_with_local_whisper(
@@ -370,6 +382,7 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language,
                 translate,
+                prompt.clone(),
                 local_model_state,
             )
             .await?
@@ -395,6 +408,7 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language,
                 translate,
+                prompt.clone(),
                 local_model_state,
             )
             .await?
@@ -407,11 +421,13 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language,
                 translate,
+                prompt.clone(),
                 local_model_state,
             )
             .await?
         }
         "apple-speech" => {
+            // Apple Speech doesn't support vocabulary hints
             local_whisper::transcribe_with_local_engine(
                 audio_data,
                 "apple-speech",
@@ -419,7 +435,46 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language,
                 translate,
+                None, // Apple Speech doesn't use prompt
                 local_model_state,
+            )
+            .await?
+        }
+        "assemblyai" => {
+            let api_key = crate::features::security::get_api_key_internal(app, &model.id)
+                .await
+                .map_err(|_| "AssemblyAI API key not found")?;
+
+            assemblyai::transcribe_with_assemblyai(audio_data, api_key, language, word_list.clone())
+                .await?
+        }
+        "deepgram" => {
+            let api_key = crate::features::security::get_api_key_internal(app, &model.id)
+                .await
+                .map_err(|_| "Deepgram API key not found")?;
+
+            deepgram::transcribe_with_deepgram(audio_data, api_key, language, word_list.clone())
+                .await?
+        }
+        "azure" => {
+            let api_key = crate::features::security::get_api_key_internal(app, &model.id)
+                .await
+                .map_err(|_| "Azure API key not found")?;
+
+            let azure_language = language.map(|lang| {
+                if lang.contains('-') {
+                    lang
+                } else {
+                    format!("{}-US", lang)
+                }
+            });
+
+            azure::transcribe_with_azure(
+                audio_data,
+                api_key,
+                None,
+                azure_language,
+                word_list.clone(),
             )
             .await?
         }

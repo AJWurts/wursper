@@ -1,3 +1,5 @@
+import { VibesSupportBanner } from '@/components/ui/feature-banner'
+
 import { VibesPanel } from '../components'
 
 export function VibesPage() {
@@ -12,9 +14,12 @@ export function VibesPage() {
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-8">
+      <div className="flex-1 overflow-y-auto">
         <VibesPanel />
       </div>
+
+      {/* Bottom Banner */}
+      <VibesSupportBanner className="shrink-0 mt-6 mb-8" />
     </div>
   )
 }

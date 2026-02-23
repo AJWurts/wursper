@@ -356,6 +356,7 @@ impl LocalModelEngine for AppleSpeechEngine {
         audio_data: Vec<u8>,
         language: Option<String>,
         _translate: bool,
+        _initial_prompt: Option<String>,
     ) -> Result<String, String> {
         log::info!(
             "Apple Speech: transcribe() called with {} bytes of audio",

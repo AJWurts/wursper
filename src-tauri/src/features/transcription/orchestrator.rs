@@ -15,7 +15,8 @@ use crate::utils::logger;
 use super::orchestrator_helpers::{
     apply_ai_post_processing, create_empty_prompt_context, get_model_name,
 };
-use super::providers::{elevenlabs, google, local_whisper, openai};
+use super::providers::{assemblyai, azure, deepgram, elevenlabs, google, local_whisper, openai};
+use super::vocabulary::get_transcription_context;
 use crate::features::recordings::metadata::RecordingMetadata;
 use crate::features::recordings::storage::{get_all_recordings, read_metadata, save_metadata};
 
@@ -474,19 +475,38 @@ async fn transcribe_with_provider(
     translate: bool,
     local_model_state: State<'_, Arc<Mutex<LocalModelManager>>>,
 ) -> Result<String, String> {
+    // Get vocabulary and snippets context for transcription providers
+    let vocab_context = get_transcription_context(app);
+    let prompt = vocab_context.to_prompt();
+    let word_list = if vocab_context.is_empty() {
+        None
+    } else {
+        Some(vocab_context.to_word_list())
+    };
+
+    if prompt.is_some() {
+        log::debug!(
+            "Using vocabulary context with {} words/phrases for transcription",
+            vocab_context.vocabulary_words.len()
+                + vocab_context.snippet_triggers.len()
+                + vocab_context.snippet_expansions.len()
+        );
+    }
+
     let response = match model.provider.as_str() {
         "openai" => {
             let api_key = security::get_api_key_internal(app, &model.id)
                 .await
                 .map_err(|_| "OpenAI API key not found. Please add your API key in settings.")?;
 
-            // Note: OpenAI API translation is handled differently (separate endpoint)
+            // OpenAI Whisper supports prompt parameter for vocabulary hints
             openai::transcribe_with_openai(
                 audio_data,
                 api_key,
                 Some(model.id.clone()),
                 language.clone(),
                 None,
+                prompt.clone(),
             )
             .await?
         }
@@ -502,14 +522,18 @@ async fn transcribe_with_provider(
                 .map(|lang| format!("{}-US", lang.to_uppercase()))
                 .or(Some("en-US".to_string()));
 
-            google::transcribe_with_google(audio_data, api_key, google_language).await?
+            // Google Speech supports speechContexts for phrase hints
+            google::transcribe_with_google(audio_data, api_key, google_language, word_list.clone())
+                .await?
         }
         "local-whisper" => {
+            // Local Whisper (whisper.cpp) supports initial_prompt
             local_whisper::transcribe_with_local_whisper(
                 audio_data,
                 Some(model.id.clone()),
                 language.clone(),
                 translate,
+                prompt.clone(),
                 local_model_state,
             )
             .await?
@@ -538,6 +562,7 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language.clone(),
                 translate,
+                prompt.clone(),
                 local_model_state,
             )
             .await?
@@ -551,12 +576,14 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language.clone(),
                 translate,
+                prompt.clone(),
                 local_model_state,
             )
             .await?
         }
         // Apple Speech Recognition (built-in macOS)
         "apple-speech" => {
+            // Apple Speech doesn't support vocabulary hints
             local_whisper::transcribe_with_local_engine(
                 audio_data,
                 "apple-speech",
@@ -564,7 +591,62 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language.clone(),
                 translate,
+                None, // Apple Speech doesn't use prompt
                 local_model_state,
+            )
+            .await?
+        }
+        // AssemblyAI - supports word_boost for vocabulary
+        "assemblyai" => {
+            let api_key = security::get_api_key_internal(app, &model.id)
+                .await
+                .map_err(|_| {
+                    "AssemblyAI API key not found. Please add your API key in settings."
+                })?;
+
+            assemblyai::transcribe_with_assemblyai(
+                audio_data,
+                api_key,
+                language.clone(),
+                word_list.clone(),
+            )
+            .await?
+        }
+        // Deepgram - supports keywords for vocabulary
+        "deepgram" => {
+            let api_key = security::get_api_key_internal(app, &model.id)
+                .await
+                .map_err(|_| "Deepgram API key not found. Please add your API key in settings.")?;
+
+            deepgram::transcribe_with_deepgram(
+                audio_data,
+                api_key,
+                language.clone(),
+                word_list.clone(),
+            )
+            .await?
+        }
+        // Azure Speech Services - supports phrase lists
+        "azure" => {
+            let api_key = security::get_api_key_internal(app, &model.id)
+                .await
+                .map_err(|_| "Azure API key not found. Please add your API key in settings.")?;
+
+            // Azure language codes use format like "en-US"
+            let azure_language = language.clone().map(|lang| {
+                if lang.contains('-') {
+                    lang
+                } else {
+                    format!("{}-US", lang)
+                }
+            });
+
+            azure::transcribe_with_azure(
+                audio_data,
+                api_key,
+                None, // Use default region (eastus)
+                azure_language,
+                word_list.clone(),
             )
             .await?
         }

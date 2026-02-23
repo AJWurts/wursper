@@ -36,6 +36,15 @@ fn get_mime_type(filename: &str) -> &'static str {
     }
 }
 
+/// Transcribe audio using OpenAI Whisper API
+///
+/// # Arguments
+/// * `audio_data` - Raw audio bytes
+/// * `api_key` - OpenAI API key
+/// * `model` - Model ID (default: "whisper-1")
+/// * `language` - Optional language code
+/// * `filename` - Optional filename for MIME type detection
+/// * `prompt` - Optional prompt with vocabulary/context to improve accuracy
 #[command]
 pub async fn transcribe_with_openai(
     audio_data: Vec<u8>,
@@ -43,6 +52,7 @@ pub async fn transcribe_with_openai(
     model: Option<String>,
     language: Option<String>,
     filename: Option<String>,
+    prompt: Option<String>,
 ) -> Result<TranscriptionResponse, String> {
     let model = model.unwrap_or_else(|| "whisper-1".to_string());
     let filename = filename.unwrap_or_else(|| "audio.wav".to_string());
@@ -61,6 +71,18 @@ pub async fn transcribe_with_openai(
 
     if let Some(lang) = language {
         form = form.text("language", lang);
+    }
+
+    // Add prompt for vocabulary/context hints
+    // This helps Whisper recognize specific terms, names, and jargon
+    if let Some(prompt_text) = prompt {
+        if !prompt_text.is_empty() {
+            log::debug!(
+                "Adding vocabulary prompt to OpenAI request: {} chars",
+                prompt_text.len()
+            );
+            form = form.text("prompt", prompt_text);
+        }
     }
 
     // Make request to OpenAI API with timeouts to prevent hangs

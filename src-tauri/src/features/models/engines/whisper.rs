@@ -63,6 +63,7 @@ impl WhisperEngine {
     /// * `audio_data` - Audio samples as f32 values (normalized to -1.0 to 1.0)
     /// * `language` - Optional language code (e.g., "en", "es", "fr")
     /// * `translate` - If true, translate output to English
+    /// * `initial_prompt` - Optional prompt with vocabulary/context for better accuracy
     ///
     /// # Returns
     /// * `Ok(String)` containing the transcribed text
@@ -72,6 +73,7 @@ impl WhisperEngine {
         audio_data: Vec<f32>,
         language: Option<String>,
         translate: bool,
+        initial_prompt: Option<String>,
     ) -> Result<String, WhisperError> {
         // Ensure a model is loaded
         let model = self
@@ -85,13 +87,23 @@ impl WhisperEngine {
         }
 
         log::info!(
-            "Whisper transcribe_internal - Model: {}, Language: {:?}, Translate: {}",
+            "Whisper transcribe_internal - Model: {}, Language: {:?}, Translate: {}, HasPrompt: {}",
             model.name,
             language,
-            translate
+            translate,
+            initial_prompt.is_some()
         );
 
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+
+        // Set initial prompt for vocabulary/context hints
+        // This helps Whisper recognize specific terms, names, and jargon
+        if let Some(ref prompt) = initial_prompt {
+            if !prompt.is_empty() {
+                log::debug!("Setting Whisper initial prompt: {} chars", prompt.len());
+                params.set_initial_prompt(prompt);
+            }
+        }
 
         // Set translate mode - when true, output will be in English
         params.set_translate(translate);
@@ -305,12 +317,13 @@ impl LocalModelEngine for WhisperEngine {
         audio_data: Vec<u8>,
         language: Option<String>,
         translate: bool,
+        initial_prompt: Option<String>,
     ) -> Result<String, String> {
         // Convert audio bytes to samples
         let samples = Self::convert_audio_to_samples(audio_data)?;
 
-        // Perform transcription
-        self.transcribe_internal(samples, language, translate)
+        // Perform transcription with vocabulary context
+        self.transcribe_internal(samples, language, translate, initial_prompt)
             .map_err(|e| e.to_string())
     }
 

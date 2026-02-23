@@ -29,8 +29,11 @@ export interface ModelResources {
 
 // STT Cloud Model Pricing (per minute)
 export const STT_PRICING: Record<string, ModelPricing> = {
-  'whisper-1': { costPerMinute: 0.006 }, // $0.006/min
+  'whisper-1': { costPerMinute: 0.006 }, // $0.006/min = $0.36/hr
   'google-cloud-speech': { costPerMinute: 0.024 }, // $0.024/min standard
+  'assemblyai-best': { costPerMinute: 0.0045 }, // $0.0045/min = $0.27/hr
+  'deepgram-nova-2': { costPerMinute: 0.0043 }, // $0.0043/min = $0.26/hr
+  'azure-speech': { costPerMinute: 0.006 }, // $0.006/min = $0.36/hr
   scribe_v1: { costPerMinute: 0.007 }, // ~$0.40/hour
 }
 

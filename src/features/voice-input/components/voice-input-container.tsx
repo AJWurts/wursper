@@ -32,7 +32,7 @@ export function VoiceInputContainer({
           isMinimal ? 'px-3' : 'gap-1.5 px-2.5'
         )}
       >
-        <div className="relative z-10 flex w-full items-center justify-center">
+        <div className="relative z-10 flex w-full items-center justify-center gap-2">
           {children}
         </div>
       </motion.div>

@@ -15,6 +15,16 @@ struct GoogleSpeechRequest {
     audio: GoogleAudioContent,
 }
 
+/// Speech context for phrase hints (vocabulary boosting)
+#[derive(Debug, Serialize, Deserialize)]
+struct SpeechContext {
+    /// List of phrases to boost recognition for
+    phrases: Vec<String>,
+    /// Boost value (0-20, higher = stronger boost)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    boost: Option<f32>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct GoogleSpeechConfig {
     encoding: String,
@@ -24,6 +34,9 @@ struct GoogleSpeechConfig {
     language_code: String,
     #[serde(rename = "enableAutomaticPunctuation")]
     enable_automatic_punctuation: bool,
+    /// Speech contexts for vocabulary/phrase hints
+    #[serde(rename = "speechContexts", skip_serializing_if = "Option::is_none")]
+    speech_contexts: Option<Vec<SpeechContext>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,11 +71,19 @@ struct GoogleErrorDetail {
     code: i32,
 }
 
+/// Transcribe audio using Google Cloud Speech-to-Text API
+///
+/// # Arguments
+/// * `audio_data` - Raw audio bytes
+/// * `api_key` - Google Cloud API key
+/// * `language` - Optional language code (e.g., "en-US")
+/// * `vocabulary` - Optional list of words/phrases to boost recognition
 #[command]
 pub async fn transcribe_with_google(
     audio_data: Vec<u8>,
     api_key: String,
     language: Option<String>,
+    vocabulary: Option<Vec<String>>,
 ) -> Result<TranscriptionResponse, String> {
     let language_code = language.unwrap_or_else(|| "en-US".to_string());
 
@@ -70,12 +91,29 @@ pub async fn transcribe_with_google(
     use base64::{engine::general_purpose::STANDARD, Engine};
     let audio_base64 = STANDARD.encode(&audio_data);
 
+    // Build speech contexts for vocabulary/phrase hints
+    let speech_contexts = vocabulary.and_then(|words| {
+        if words.is_empty() {
+            None
+        } else {
+            log::debug!(
+                "Adding {} phrase hints to Google Speech request",
+                words.len()
+            );
+            Some(vec![SpeechContext {
+                phrases: words,
+                boost: Some(10.0), // Strong boost for user-defined vocabulary
+            }])
+        }
+    });
+
     let request_body = GoogleSpeechRequest {
         config: GoogleSpeechConfig {
             encoding: "LINEAR16".to_string(),
             sample_rate_hertz: 16000,
             language_code,
             enable_automatic_punctuation: true,
+            speech_contexts,
         },
         audio: GoogleAudioContent {
             content: audio_base64,
