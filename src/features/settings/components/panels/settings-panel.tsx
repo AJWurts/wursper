@@ -35,6 +35,8 @@ interface SettingItemProps {
   children?: ReactNode
   disabled?: boolean
   info?: ReactNode
+  /** Use 'stacked' layout to place action below title/description */
+  layout?: 'inline' | 'stacked'
 }
 
 export function SettingItem({
@@ -44,7 +46,45 @@ export function SettingItem({
   children,
   disabled,
   info,
+  layout = 'inline',
 }: SettingItemProps) {
+  if (layout === 'stacked') {
+    return (
+      <div className="py-4 space-y-3" aria-disabled={disabled ?? false}>
+        <div
+          className={cn(
+            'space-y-1 transition-opacity',
+            disabled && 'opacity-50'
+          )}
+        >
+          <div className="flex items-center gap-1.5">
+            <h3
+              className={cn(
+                'text-sm font-medium leading-none',
+                disabled && 'text-muted-foreground'
+              )}
+            >
+              {title}
+            </h3>
+            {info && <div className="opacity-100">{info}</div>}
+          </div>
+          {description && (
+            <p
+              className={cn(
+                'text-sm text-muted-foreground',
+                disabled && 'text-muted-foreground/60'
+              )}
+            >
+              {description}
+            </p>
+          )}
+        </div>
+        {action && <div className={cn(disabled && 'opacity-50')}>{action}</div>}
+        {children && <div>{children}</div>}
+      </div>
+    )
+  }
+
   return (
     <div
       className="flex items-start justify-between gap-4 py-4"

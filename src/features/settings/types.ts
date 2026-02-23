@@ -1,4 +1,4 @@
-import { type Settings } from './schema'
+import { type Settings, type VoiceInputDisplayMode } from './schema'
 
 export interface SettingsStore {
   settings: Settings
@@ -7,6 +7,7 @@ export interface SettingsStore {
   setOnboardingComplete: (completed: boolean) => Promise<void>
   setVoiceInputShortcut: (shortcut: string) => Promise<void>
   setMicrophoneDevice: (deviceId: string | null) => Promise<void>
+  setVoiceInputDisplayMode: (mode: VoiceInputDisplayMode) => Promise<void>
   setTranscriptionLanguage: (language: string) => Promise<void>
   setAutoPaste: (enabled: boolean) => Promise<void>
   setAutoCopyToClipboard: (enabled: boolean) => Promise<void>

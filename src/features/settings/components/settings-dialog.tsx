@@ -84,16 +84,16 @@ export function SettingsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="min-w-[900px] max-w-[900px] max-h-[700px] min-h-[700px] p-0!"
+        className="min-w-[900px] max-w-[900px] h-[700px] p-0! overflow-hidden"
         showCloseButton={false}
       >
-        <div className="flex h-full w-full">
+        <div className="flex h-full w-full overflow-hidden">
           <SettingsSidebar
             activeSection={activeSection}
             onSectionChange={handleSectionChange}
           />
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 h-full overflow-y-auto">
             <div className="p-8">
               <ActivePanel onNavigateToPanel={handleSectionChange} />
             </div>

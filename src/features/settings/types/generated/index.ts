@@ -4,6 +4,7 @@
 export * from './Settings'
 export * from './OnboardingSettings'
 export * from './VoiceInputSettings'
+export * from './VoiceInputDisplayMode'
 export * from './TranscriptionSettings'
 export * from './ShortcutsSettings'
 export * from './SystemSettings'

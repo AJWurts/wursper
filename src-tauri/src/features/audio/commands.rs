@@ -1,6 +1,7 @@
 use super::player::{play_error_sound, play_recording_start_sound, play_recording_stop_sound};
 use super::recorder::AudioRecorder;
 use super::state::{RecordingState, RecordingStateManager};
+use crate::types::settings::VoiceInputDisplayMode;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -28,6 +29,18 @@ fn try_lock_with_timeout<T>(
         .ok_or_else(|| "Lock acquisition timed out - operation in progress".to_string())
 }
 
+/// Hide the recording window
+#[cfg(target_os = "macos")]
+fn hide_recording_window(app: &AppHandle) {
+    use tauri::Manager;
+
+    if let Some(window) = app.get_webview_window("voice-input") {
+        let _ = window.hide();
+    }
+
+    crate::features::window::set_pill_monitor_active(false);
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/features/voice-input/types/generated/")]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +49,13 @@ pub struct RecordingResponse {
     pub state: RecordingState,
     pub error: Option<String>,
     pub file_path: Option<String>,
+}
+
+/// Payload for voice-input-mode event sent to React
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceInputModePayload {
+    pub display_mode: VoiceInputDisplayMode,
 }
 
 #[command]
@@ -137,12 +157,13 @@ pub async fn start_recording(
     }
 
     // Get settings from cache (faster) with fallback to direct store access
-    let (device_id, play_sound) = if let Some(cache) =
+    let (device_id, play_sound, display_mode) = if let Some(cache) =
         app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>()
     {
         (
             cache.get_microphone_device_id(),
             cache.get_play_sound_on_recording().unwrap_or(true),
+            cache.get_display_mode(),
         )
     } else {
         // Fallback to direct store access if cache not available
@@ -167,7 +188,20 @@ pub async fn start_recording(
             .and_then(|p| p.as_bool())
             .unwrap_or(true);
 
-        (device_id, play_sound)
+        let display_mode = settings
+            .as_ref()
+            .and_then(|s| s.as_object())
+            .and_then(|obj| obj.get("voiceInput").and_then(|v| v.as_object()))
+            .and_then(|obj| obj.get("displayMode"))
+            .and_then(|d| d.as_str())
+            .and_then(|s| match s {
+                "standard" => Some(VoiceInputDisplayMode::Standard),
+                "minimal" => Some(VoiceInputDisplayMode::Minimal),
+                _ => None,
+            })
+            .unwrap_or(VoiceInputDisplayMode::Standard);
+
+        (device_id, play_sound, display_mode)
     };
 
     // Transition to Starting state
@@ -197,20 +231,39 @@ pub async fn start_recording(
     // Set app handle for emitting audio levels
     recorder_guard.set_app_handle(app.clone());
 
-    // Show window BEFORE starting recording so it appears immediately
-    // This ensures the window is visible even if the recording start is delayed (e.g., external microphone)
-    if let Some(window) = app.get_webview_window("voice-input") {
-        // Position window on the screen where the mouse cursor is
-        #[cfg(target_os = "macos")]
-        {
-            if let Err(e) = crate::features::window::position_pill_window_on_current_screen(&app) {
-                log::warn!("Failed to position pill window: {:?}", e);
-            }
-        }
+    // Show the voice input window with appropriate display mode
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::Manager;
 
-        let _ = window.show();
-        // Don't steal focus - keep user focused on their active application
-        log::info!("Voice input window shown before recording start");
+        if let Some(window) = app.get_webview_window("voice-input") {
+            // Emit display mode to React BEFORE showing window to avoid button flash
+            let _ = app.emit(
+                "voice-input-mode",
+                VoiceInputModePayload {
+                    display_mode: display_mode.clone(),
+                },
+            );
+
+            // Configure window size and position based on display mode
+            if let Err(e) =
+                crate::features::window::configure_pill_window_for_mode(&app, &display_mode)
+            {
+                log::warn!("Failed to configure pill window for mode: {:?}", e);
+                if let Err(e) =
+                    crate::features::window::position_pill_window_on_current_screen(&app)
+                {
+                    log::warn!("Failed to position pill window: {:?}", e);
+                }
+            }
+
+            let _ = window.show();
+
+            log::info!(
+                "Voice input window shown with mode {:?} before recording start",
+                display_mode
+            );
+        }
     }
 
     match recorder_guard.start_recording(&file_path, device_id) {
@@ -282,9 +335,8 @@ pub async fn start_recording(
 
             let _ = app.emit("recording-state-changed", RecordingState::Error);
 
-            if let Some(window) = app.get_webview_window("voice-input") {
-                let _ = window.hide();
-            }
+            #[cfg(target_os = "macos")]
+            hide_recording_window(&app);
 
             Err(e)
         }
@@ -528,13 +580,9 @@ pub async fn stop_recording(
                         let _ = app_clone.emit("recording-state-changed", RecordingState::Idle);
                     }
 
-                    if let Some(window) = app_clone.get_webview_window("voice-input") {
-                        let _ = window.hide();
-                    }
-
-                    // Disable active pill window monitoring when not recording
+                    // Hide all recording windows
                     #[cfg(target_os = "macos")]
-                    crate::features::window::set_pill_monitor_active(false);
+                    hide_recording_window(&app_clone);
                 });
             }
 
@@ -606,13 +654,9 @@ pub async fn stop_recording(
                 log::warn!("ShortcutManager not available, cannot unregister Escape on error");
             }
 
-            if let Some(window) = app.get_webview_window("voice-input") {
-                let _ = window.hide();
-            }
-
-            // Disable active pill window monitoring on error
+            // Hide all recording windows on error
             #[cfg(target_os = "macos")]
-            crate::features::window::set_pill_monitor_active(false);
+            hide_recording_window(&app);
 
             Err(e)
         }
@@ -745,13 +789,10 @@ pub async fn cancel_recording(
         1.0,
     );
 
-    let app_clone = app.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-        if let Some(window) = app_clone.get_webview_window("voice-input") {
-            let _ = window.hide();
-        }
-    });
+    // Hide recording window immediately, not delayed
+    // A delayed hide can race with a new recording starting and hide the new window
+    #[cfg(target_os = "macos")]
+    hide_recording_window(&app);
 
     log::info!("Recording cancelled successfully");
 
@@ -797,17 +838,12 @@ pub async fn force_reset_recording(
     // Reset debounce timer
     *LAST_COMMAND_TIME.lock() = None;
 
-    // Hide voice input window if visible
-    if let Some(window) = app.get_webview_window("voice-input") {
-        let _ = window.hide();
-    }
+    // Hide all recording windows
+    #[cfg(target_os = "macos")]
+    hide_recording_window(&app);
 
     // Emit state change
     let _ = app.emit("recording-state-changed", RecordingState::Idle);
-
-    // Disable pill window monitoring
-    #[cfg(target_os = "macos")]
-    crate::features::window::set_pill_monitor_active(false);
 
     log::info!("Recording state force reset to Idle");
 

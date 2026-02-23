@@ -24,10 +24,19 @@ const TRAY_LANGUAGES: &[(&str, &str)] = &[
 /// Sets up the system tray icon and menu
 pub fn setup_tray(app: &App, model_manager_cleanup: Arc<Mutex<LocalModelManager>>) -> Result<()> {
     // Get available audio devices
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    let devices = runtime
-        .block_on(enumerate_audio_devices())
-        .unwrap_or_default();
+    // IMPORTANT: We use a separate thread to avoid nested runtime issues.
+    // Creating a tokio::runtime::Runtime::new().block_on() inside Tauri's
+    // existing runtime can cause deadlocks/hangs.
+    let devices = std::thread::spawn(|| {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .ok();
+        rt.and_then(|rt| rt.block_on(enumerate_audio_devices()).ok())
+            .unwrap_or_default()
+    })
+    .join()
+    .unwrap_or_default();
 
     // Get current microphone device from settings
     let store = app.store("settings").map_err(|e| {
@@ -239,23 +248,15 @@ async fn rebuild_tray_menu(
     let devices = enumerate_audio_devices().await.unwrap_or_default();
 
     // Get current microphone device from settings
-    // Reload the store to ensure we have fresh data
+    // IMPORTANT: Do NOT call store.reload() here!
+    // The store already has the latest data in memory.
+    // Calling reload() is blocking I/O and can cause deadlocks during recording.
     let store = app.store("settings").map_err(|e| {
         tauri::Error::Io(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!("Failed to get store: {}", e),
         ))
     })?;
-
-    // Force reload from disk to get latest changes
-    log::info!("Reloading store from disk...");
-    store.reload().map_err(|e| {
-        tauri::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to reload store: {}", e),
-        ))
-    })?;
-    log::info!("Store reloaded successfully");
 
     let current_device_id = store.get("settings").and_then(|settings| {
         settings
@@ -788,13 +789,29 @@ fn handle_tray_event(
             }
         }
         "quit" => {
-            // Cleanup local model before exit
-            let runtime = tokio::runtime::Runtime::new().unwrap();
-            runtime.block_on(async {
-                let mut manager = model_manager_cleanup.lock().await;
-                manager.unload_model();
-                logger::info("Local model stopped on app exit");
-            });
+            // Cleanup local model before exit using a separate thread
+            // to avoid nested runtime issues
+            let model_manager = model_manager_cleanup.clone();
+            std::thread::spawn(move || {
+                if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    rt.block_on(async {
+                        if let Ok(mut manager) = tokio::time::timeout(
+                            std::time::Duration::from_secs(2),
+                            model_manager.lock(),
+                        )
+                        .await
+                        {
+                            manager.unload_model();
+                            logger::info("Local model stopped on app exit");
+                        }
+                    });
+                }
+            })
+            .join()
+            .ok();
             app.exit(0);
         }
         _ => {}

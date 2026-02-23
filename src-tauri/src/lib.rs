@@ -67,6 +67,32 @@ fn get_device_id() -> Result<String, String> {
     machine_uid::get().map_err(|e| format!("Failed to get device ID: {}", e))
 }
 
+/// Invalidate the settings cache to reload from in-memory store.
+///
+/// IMPORTANT: This does NOT reload from disk. The frontend writes to the store
+/// first, then calls this to update the cache. This design prevents deadlocks
+/// when settings are changed while recording is active.
+///
+/// The cache uses atomic swap semantics, so this operation is very fast and
+/// won't block readers (e.g., the audio thread reading settings).
+#[tauri::command]
+async fn invalidate_settings_cache(app: tauri::AppHandle) -> Result<(), String> {
+    // Run on blocking thread pool to avoid any potential main thread blocking
+    let result = tokio::task::spawn_blocking(move || {
+        if let Some(cache) =
+            app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>()
+        {
+            cache.invalidate(&app)?;
+            log::debug!("Settings cache invalidated via command");
+        }
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?;
+
+    result
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app_version = env!("CARGO_PKG_VERSION");
@@ -382,6 +408,7 @@ pub fn run() {
             get_recording_audio_path,
             // System preferences
             set_show_in_dock,
+            invalidate_settings_cache,
             // Data export/import
             export_all_data,
             import_all_data,
