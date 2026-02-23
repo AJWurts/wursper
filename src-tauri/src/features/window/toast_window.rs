@@ -85,8 +85,15 @@ fn position_toast_window(app: &AppHandle) -> tauri::Result<()> {
         .get_webview_window("toast")
         .ok_or_else(|| tauri::Error::WindowNotFound)?;
 
-    let (pos_x, pos_y) = unsafe {
-        let mtm = MainThreadMarker::new_unchecked();
+    // Safely get MainThreadMarker - don't use unchecked version
+    // If we're not on the main thread, fall back to default position
+    let Some(mtm) = MainThreadMarker::new() else {
+        log::warn!("position_toast_window called from non-main thread, using default position");
+        return Ok(());
+    };
+
+    let (pos_x, pos_y) = {
+        // No longer need unsafe block since we verified main thread
 
         // Get the mouse location to find current screen
         let mouse_location = NSEvent::mouseLocation();
@@ -114,7 +121,7 @@ fn position_toast_window(app: &AppHandle) -> tauri::Result<()> {
 
         let toast_width = 360.0;
         let toast_height = 72.0;
-        let pill_width = 240.0;
+        let _pill_width = 240.0; // Used for layout reference
         let pill_height = 40.0;
         let bottom_offset = 16.0;
         let gap = 12.0; // Gap between pill and toast
@@ -151,15 +158,23 @@ pub fn setup_toast_window(app: &AppHandle) -> tauri::Result<()> {
 
     log::info!("Setting up toast window");
 
-    let (toast_x, toast_y) = unsafe {
-        let mtm = MainThreadMarker::new_unchecked();
+    // Safely get MainThreadMarker - setup should always be on main thread
+    // but we check to be safe and avoid crashes
+    let mtm = MainThreadMarker::new().ok_or_else(|| {
+        tauri::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "setup_toast_window must be called from main thread",
+        ))
+    })?;
+
+    let (toast_x, toast_y) = {
         let screen = NSScreen::mainScreen(mtm).expect("Failed to get main screen");
         let screen_frame = screen.frame();
         let visible_frame = screen.visibleFrame();
 
         let toast_width = 360.0;
         let toast_height = 72.0;
-        let pill_width = 240.0;
+        let _pill_width = 240.0; // Used for layout calculations
         let pill_height = 40.0;
         let bottom_offset = 16.0;
         let gap = 12.0;

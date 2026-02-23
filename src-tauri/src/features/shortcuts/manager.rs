@@ -1,12 +1,17 @@
 use crate::features::shortcuts::utils::parse_shortcut;
 use crate::utils::logger;
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 use tauri::{command, App, AppHandle, Manager, Result, State};
 use tauri_plugin_global_shortcut::{
     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
 };
 use tauri_plugin_store::StoreExt;
 
+/// ShortcutManager uses parking_lot::Mutex instead of std::sync::Mutex because:
+/// - No lock poisoning on panic (more resilient)
+/// - Faster locking operations
+/// - Consistent with other locks in the codebase
 pub struct ShortcutManager {
     pub voice_input_shortcut: Arc<Mutex<Option<Shortcut>>>,
     pub push_to_talk_shortcut: Arc<Mutex<Option<Shortcut>>>,
@@ -77,20 +82,13 @@ pub fn register_voice_input_shortcut(app: &App) -> Result<()> {
     )?;
 
     // Store shortcuts in state
+    // parking_lot::Mutex never poisons, so lock() always succeeds
     let shortcut_state = app.state::<ShortcutManager>();
-    if let Ok(mut current) = shortcut_state.voice_input_shortcut.lock() {
-        *current = Some(voice_shortcut);
-    }
-    if let Ok(mut current) = shortcut_state.push_to_talk_shortcut.lock() {
-        *current = ptt_shortcut_opt;
-    }
-    if let Ok(mut current) = shortcut_state.paste_shortcut.lock() {
-        *current = Some(paste_shortcut);
-    }
+    *shortcut_state.voice_input_shortcut.lock() = Some(voice_shortcut);
+    *shortcut_state.push_to_talk_shortcut.lock() = ptt_shortcut_opt;
+    *shortcut_state.paste_shortcut.lock() = Some(paste_shortcut);
     // Escape shortcut is not registered here - it's registered dynamically when recording starts
-    if let Ok(mut current) = shortcut_state.escape_shortcut.lock() {
-        *current = None;
-    }
+    *shortcut_state.escape_shortcut.lock() = None;
 
     Ok(())
 }
@@ -234,10 +232,8 @@ pub async fn update_voice_input_shortcut(
     ));
 
     // Check if shortcuts are enabled
-    let shortcuts_enabled = *shortcut_state
-        .shortcuts_enabled
-        .lock()
-        .map_err(|e| format!("Failed to lock shortcuts_enabled: {}", e))?;
+    // parking_lot::Mutex never fails, so we can access directly
+    let shortcuts_enabled = *shortcut_state.shortcuts_enabled.lock();
 
     if !shortcuts_enabled {
         logger::info("Shortcuts are disabled, skipping registration");
@@ -249,7 +245,8 @@ pub async fn update_voice_input_shortcut(
         .ok_or_else(|| format!("Failed to parse shortcut: {}", shortcut_str))?;
 
     // Unregister old shortcut if it exists
-    if let Ok(mut old_shortcut) = shortcut_state.voice_input_shortcut.lock() {
+    {
+        let mut old_shortcut = shortcut_state.voice_input_shortcut.lock();
         if let Some(old) = old_shortcut.take() {
             logger::info("Unregistering old voice input shortcut");
             let _ = app.global_shortcut().unregister(old);
@@ -265,9 +262,7 @@ pub async fn update_voice_input_shortcut(
         .map_err(|e| format!("Failed to register voice input shortcut: {}", e))?;
 
     // Store the new shortcut
-    if let Ok(mut current) = shortcut_state.voice_input_shortcut.lock() {
-        *current = Some(shortcut_clone);
-    }
+    *shortcut_state.voice_input_shortcut.lock() = Some(shortcut_clone);
 
     logger::info("Voice input shortcut updated successfully");
     Ok(())
@@ -283,10 +278,7 @@ pub async fn update_paste_shortcut(
     logger::info(&format!("Updating paste shortcut to: {}", shortcut_str));
 
     // Check if shortcuts are enabled
-    let shortcuts_enabled = *shortcut_state
-        .shortcuts_enabled
-        .lock()
-        .map_err(|e| format!("Failed to lock shortcuts_enabled: {}", e))?;
+    let shortcuts_enabled = *shortcut_state.shortcuts_enabled.lock();
 
     if !shortcuts_enabled {
         logger::info("Shortcuts are disabled, skipping registration");
@@ -298,7 +290,8 @@ pub async fn update_paste_shortcut(
         .ok_or_else(|| format!("Failed to parse shortcut: {}", shortcut_str))?;
 
     // Unregister old shortcut if it exists
-    if let Ok(mut old_shortcut) = shortcut_state.paste_shortcut.lock() {
+    {
+        let mut old_shortcut = shortcut_state.paste_shortcut.lock();
         if let Some(old) = old_shortcut.take() {
             logger::info("Unregistering old paste shortcut");
             let _ = app.global_shortcut().unregister(old);
@@ -314,9 +307,7 @@ pub async fn update_paste_shortcut(
         .map_err(|e| format!("Failed to register paste shortcut: {}", e))?;
 
     // Store the new shortcut
-    if let Ok(mut current) = shortcut_state.paste_shortcut.lock() {
-        *current = Some(shortcut_clone);
-    }
+    *shortcut_state.paste_shortcut.lock() = Some(shortcut_clone);
 
     logger::info("Paste shortcut updated successfully");
     Ok(())
@@ -346,30 +337,31 @@ pub async fn disable_global_shortcuts(
     logger::info("Disabling all global shortcuts");
 
     // Unregister voice input shortcut
-    if let Ok(mut voice_shortcut) = shortcut_state.voice_input_shortcut.lock() {
+    {
+        let mut voice_shortcut = shortcut_state.voice_input_shortcut.lock();
         if let Some(shortcut) = voice_shortcut.take() {
             let _ = app.global_shortcut().unregister(shortcut);
         }
     }
 
     // Unregister paste shortcut
-    if let Ok(mut paste_shortcut) = shortcut_state.paste_shortcut.lock() {
+    {
+        let mut paste_shortcut = shortcut_state.paste_shortcut.lock();
         if let Some(shortcut) = paste_shortcut.take() {
             let _ = app.global_shortcut().unregister(shortcut);
         }
     }
 
     // Unregister escape shortcut
-    if let Ok(mut escape_shortcut) = shortcut_state.escape_shortcut.lock() {
+    {
+        let mut escape_shortcut = shortcut_state.escape_shortcut.lock();
         if let Some(shortcut) = escape_shortcut.take() {
             let _ = app.global_shortcut().unregister(shortcut);
         }
     }
 
     // Set shortcuts as disabled
-    if let Ok(mut enabled) = shortcut_state.shortcuts_enabled.lock() {
-        *enabled = false;
-    }
+    *shortcut_state.shortcuts_enabled.lock() = false;
 
     logger::info("All global shortcuts disabled");
     Ok(())
@@ -384,15 +376,11 @@ pub async fn enable_global_shortcuts(
     logger::info("Enabling all global shortcuts");
 
     // Set shortcuts as enabled
-    if let Ok(mut enabled) = shortcut_state.shortcuts_enabled.lock() {
-        *enabled = true;
-    }
+    *shortcut_state.shortcuts_enabled.lock() = true;
 
     // Re-register voice input shortcut from settings
     let voice_input_shortcut = get_voice_input_shortcut_from_settings(&app);
-    if let Ok(parsed) = parse_shortcut(&voice_input_shortcut)
-        .ok_or_else(|| "Failed to parse voice input shortcut".to_string())
-    {
+    if let Some(parsed) = parse_shortcut(&voice_input_shortcut) {
         let shortcut_clone = parsed.clone();
         app.global_shortcut()
             .on_shortcut(parsed.clone(), move |app, shortcut, event| {
@@ -400,16 +388,12 @@ pub async fn enable_global_shortcuts(
             })
             .map_err(|e| format!("Failed to register voice input shortcut: {}", e))?;
 
-        if let Ok(mut current) = shortcut_state.voice_input_shortcut.lock() {
-            *current = Some(shortcut_clone);
-        }
+        *shortcut_state.voice_input_shortcut.lock() = Some(shortcut_clone);
     }
 
     // Re-register paste shortcut from settings
-    let paste_shortcut = get_paste_shortcut_from_settings(&app);
-    if let Ok(parsed) =
-        parse_shortcut(&paste_shortcut).ok_or_else(|| "Failed to parse paste shortcut".to_string())
-    {
+    let paste_shortcut_str = get_paste_shortcut_from_settings(&app);
+    if let Some(parsed) = parse_shortcut(&paste_shortcut_str) {
         let shortcut_clone = parsed.clone();
         app.global_shortcut()
             .on_shortcut(parsed.clone(), move |app, shortcut, event| {
@@ -417,9 +401,7 @@ pub async fn enable_global_shortcuts(
             })
             .map_err(|e| format!("Failed to register paste shortcut: {}", e))?;
 
-        if let Ok(mut current) = shortcut_state.paste_shortcut.lock() {
-            *current = Some(shortcut_clone);
-        }
+        *shortcut_state.paste_shortcut.lock() = Some(shortcut_clone);
     }
 
     // Re-register Escape shortcut
@@ -431,9 +413,7 @@ pub async fn enable_global_shortcuts(
         })
         .map_err(|e| format!("Failed to register escape shortcut: {}", e))?;
 
-    if let Ok(mut current) = shortcut_state.escape_shortcut.lock() {
-        *current = Some(escape_clone);
-    }
+    *shortcut_state.escape_shortcut.lock() = Some(escape_clone);
 
     logger::info("All global shortcuts enabled");
     Ok(())
@@ -472,10 +452,7 @@ pub async fn register_ptt_shortcut(
     logger::info(&format!("Registering PTT shortcut: {}", shortcut_str));
 
     // Check if shortcuts are enabled
-    let shortcuts_enabled = *shortcut_state
-        .shortcuts_enabled
-        .lock()
-        .map_err(|e| format!("Failed to lock shortcuts_enabled: {}", e))?;
+    let shortcuts_enabled = *shortcut_state.shortcuts_enabled.lock();
 
     if !shortcuts_enabled {
         logger::info("Shortcuts are disabled, skipping PTT registration");
@@ -495,9 +472,7 @@ pub async fn register_ptt_shortcut(
         .map_err(|e| format!("Failed to register PTT shortcut: {}", e))?;
 
     // Store the new shortcut
-    if let Ok(mut current) = shortcut_state.push_to_talk_shortcut.lock() {
-        *current = Some(shortcut_clone);
-    }
+    *shortcut_state.push_to_talk_shortcut.lock() = Some(shortcut_clone);
 
     logger::info("PTT shortcut registered successfully");
     Ok(())
@@ -512,7 +487,8 @@ pub async fn unregister_ptt_shortcut(
     logger::info("Unregistering PTT shortcut");
 
     // Unregister PTT shortcut
-    if let Ok(mut ptt_shortcut) = shortcut_state.push_to_talk_shortcut.lock() {
+    {
+        let mut ptt_shortcut = shortcut_state.push_to_talk_shortcut.lock();
         if let Some(shortcut) = ptt_shortcut.take() {
             let _ = app.global_shortcut().unregister(shortcut);
         }
@@ -532,10 +508,7 @@ pub async fn update_ptt_shortcut(
     logger::info(&format!("Updating PTT shortcut to: {}", shortcut_str));
 
     // Check if shortcuts are enabled
-    let shortcuts_enabled = *shortcut_state
-        .shortcuts_enabled
-        .lock()
-        .map_err(|e| format!("Failed to lock shortcuts_enabled: {}", e))?;
+    let shortcuts_enabled = *shortcut_state.shortcuts_enabled.lock();
 
     if !shortcuts_enabled {
         logger::info("Shortcuts are disabled, skipping PTT update");
@@ -543,7 +516,8 @@ pub async fn update_ptt_shortcut(
     }
 
     // Unregister old shortcut
-    if let Ok(mut old_shortcut) = shortcut_state.push_to_talk_shortcut.lock() {
+    {
+        let mut old_shortcut = shortcut_state.push_to_talk_shortcut.lock();
         if let Some(old) = old_shortcut.take() {
             logger::info("Unregistering old PTT shortcut");
             let _ = app.global_shortcut().unregister(old);
@@ -562,9 +536,7 @@ pub async fn update_ptt_shortcut(
         .map_err(|e| format!("Failed to register PTT shortcut: {}", e))?;
 
     // Store the new shortcut
-    if let Ok(mut current) = shortcut_state.push_to_talk_shortcut.lock() {
-        *current = Some(shortcut_clone);
-    }
+    *shortcut_state.push_to_talk_shortcut.lock() = Some(shortcut_clone);
 
     logger::info("PTT shortcut updated successfully");
     Ok(())
@@ -579,10 +551,7 @@ pub async fn register_escape_shortcut(
     log::info!("Registering Escape shortcut for recording cancellation");
 
     // Check if shortcuts are enabled
-    let shortcuts_enabled = *shortcut_state
-        .shortcuts_enabled
-        .lock()
-        .map_err(|e| format!("Failed to lock shortcuts_enabled: {}", e))?;
+    let shortcuts_enabled = *shortcut_state.shortcuts_enabled.lock();
 
     if !shortcuts_enabled {
         log::info!("Shortcuts are disabled, skipping Escape registration");
@@ -601,9 +570,7 @@ pub async fn register_escape_shortcut(
         .map_err(|e| format!("Failed to register Escape shortcut: {}", e))?;
 
     // Store the shortcut
-    if let Ok(mut current) = shortcut_state.escape_shortcut.lock() {
-        *current = Some(escape_clone);
-    }
+    *shortcut_state.escape_shortcut.lock() = Some(escape_clone);
 
     log::info!("Escape shortcut registered successfully");
     Ok(())
@@ -618,7 +585,8 @@ pub async fn unregister_escape_shortcut(
     log::info!("Unregistering Escape shortcut");
 
     // Unregister Escape shortcut
-    if let Ok(mut escape_shortcut) = shortcut_state.escape_shortcut.lock() {
+    {
+        let mut escape_shortcut = shortcut_state.escape_shortcut.lock();
         if let Some(shortcut) = escape_shortcut.take() {
             let _ = app.global_shortcut().unregister(shortcut);
             log::info!("Escape shortcut unregistered");

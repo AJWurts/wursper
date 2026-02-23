@@ -2,25 +2,33 @@
 //!
 //! Provides secure storage of API keys using the macOS system keychain.
 //! Includes in-memory caching to minimize keychain access and password prompts.
+//!
+//! Uses parking_lot::RwLock instead of std::sync::RwLock because:
+//! - No lock poisoning on panic (more resilient)
+//! - Faster locking operations
+//! - Consistent with other locks in the codebase
 
 pub mod keychain;
 pub mod legacy;
 pub mod migration;
 
+use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::RwLock;
 use tauri::{command, AppHandle};
 use tauri_plugin_store::StoreExt;
 
 /// In-memory cache for API keys to reduce keychain access
 /// This minimizes password prompts during a session
-/// Key: model_id, Value: API key (empty string means "checked but not found")
+/// Key: model_id, Value: API key (None means "checked but not found")
+///
+/// Uses parking_lot::RwLock which never poisons, avoiding potential panics
+/// if a thread crashes while holding the lock.
 static API_KEY_CACHE: RwLock<Option<HashMap<String, Option<String>>>> = RwLock::new(None);
 
 /// Initialize the cache
 fn ensure_cache_initialized() {
-    let mut cache = API_KEY_CACHE.write().unwrap();
+    let mut cache = API_KEY_CACHE.write();
     if cache.is_none() {
         *cache = Some(HashMap::new());
     }
@@ -28,7 +36,7 @@ fn ensure_cache_initialized() {
 
 /// Check if we've already checked this model's key (regardless of result)
 fn is_cached(model_id: &str) -> bool {
-    let cache = API_KEY_CACHE.read().unwrap();
+    let cache = API_KEY_CACHE.read();
     cache
         .as_ref()
         .map(|c| c.contains_key(model_id))
@@ -37,7 +45,7 @@ fn is_cached(model_id: &str) -> bool {
 
 /// Get API key from cache (returns None if not cached OR if cached as "no key")
 fn get_cached_key(model_id: &str) -> Option<String> {
-    let cache = API_KEY_CACHE.read().unwrap();
+    let cache = API_KEY_CACHE.read();
     cache
         .as_ref()
         .and_then(|c| c.get(model_id).cloned())
@@ -46,7 +54,7 @@ fn get_cached_key(model_id: &str) -> Option<String> {
 
 /// Check if API key exists in cache
 fn has_cached_key(model_id: &str) -> Option<bool> {
-    let cache = API_KEY_CACHE.read().unwrap();
+    let cache = API_KEY_CACHE.read();
     cache
         .as_ref()
         .and_then(|c| c.get(model_id).map(|v| v.is_some()))
@@ -55,7 +63,7 @@ fn has_cached_key(model_id: &str) -> Option<bool> {
 /// Store API key in cache
 fn cache_key(model_id: &str, api_key: &str) {
     ensure_cache_initialized();
-    let mut cache = API_KEY_CACHE.write().unwrap();
+    let mut cache = API_KEY_CACHE.write();
     if let Some(c) = cache.as_mut() {
         c.insert(model_id.to_string(), Some(api_key.to_string()));
     }
@@ -64,7 +72,7 @@ fn cache_key(model_id: &str, api_key: &str) {
 /// Mark that we checked and there's no key
 fn cache_no_key(model_id: &str) {
     ensure_cache_initialized();
-    let mut cache = API_KEY_CACHE.write().unwrap();
+    let mut cache = API_KEY_CACHE.write();
     if let Some(c) = cache.as_mut() {
         c.insert(model_id.to_string(), None);
     }
@@ -72,7 +80,7 @@ fn cache_no_key(model_id: &str) {
 
 /// Remove API key from cache
 fn uncache_key(model_id: &str) {
-    let mut cache = API_KEY_CACHE.write().unwrap();
+    let mut cache = API_KEY_CACHE.write();
     if let Some(c) = cache.as_mut() {
         c.remove(model_id);
     }

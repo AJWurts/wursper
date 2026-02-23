@@ -4,7 +4,12 @@ import { create } from 'zustand'
 
 import { storeAnalytics } from '@/lib/analytics'
 
-import { AiProcessingSettings, defaultSettings, type Settings } from './schema'
+import {
+  AiProcessingSettings,
+  defaultSettings,
+  type Settings,
+  type VoiceInputDisplayMode,
+} from './schema'
 
 import type { SettingsStore } from './types'
 
@@ -54,6 +59,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
             storedSettings?.voiceInput?.enablePushToTalk ?? false,
           pushToTalkShortcut:
             storedSettings?.voiceInput?.pushToTalkShortcut ?? 'Alt+R',
+          displayMode: storedSettings?.voiceInput?.displayMode ?? 'standard',
         },
         transcription: {
           language: storedSettings?.transcription?.language ?? 'en',
@@ -170,6 +176,28 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       )
     } catch (error) {
       console.error('Error saving microphone device:', error)
+    }
+  },
+
+  setVoiceInputDisplayMode: async (mode: VoiceInputDisplayMode) => {
+    try {
+      const store = await getTauriStore()
+      const newSettings = {
+        ...get().settings,
+        voiceInput: {
+          ...get().settings.voiceInput,
+          displayMode: mode,
+        },
+      }
+      await store.set('settings', newSettings)
+      await store.save()
+      set({ settings: newSettings })
+
+      // Invalidate Rust cache so the new mode is used on next recording
+      await invoke('invalidate_settings_cache')
+      storeAnalytics.trackSettingChange('voiceInputDisplayMode', mode)
+    } catch (error) {
+      console.error('Error saving voice input display mode:', error)
     }
   },
 

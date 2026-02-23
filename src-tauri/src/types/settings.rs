@@ -9,6 +9,16 @@ pub struct OnboardingSettings {
     pub completed: bool,
 }
 
+/// Voice input display mode
+#[derive(Debug, Clone, Serialize, Deserialize, TS, Default, PartialEq)]
+#[ts(export, export_to = "../../src/features/settings/types/generated/")]
+#[serde(rename_all = "lowercase")]
+pub enum VoiceInputDisplayMode {
+    #[default]
+    Standard,
+    Minimal,
+}
+
 /// Voice input settings
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/features/settings/types/generated/")]
@@ -18,6 +28,8 @@ pub struct VoiceInputSettings {
     pub microphone_device_id: Option<String>,
     pub enable_push_to_talk: bool,
     pub push_to_talk_shortcut: String,
+    #[serde(default)]
+    pub display_mode: VoiceInputDisplayMode,
 }
 
 /// Transcription settings
@@ -94,6 +106,7 @@ impl Default for Settings {
                 microphone_device_id: None,
                 enable_push_to_talk: false,
                 push_to_talk_shortcut: "Alt+R".to_string(),
+                display_mode: VoiceInputDisplayMode::default(),
             },
             transcription: TranscriptionSettings {
                 language: "en".to_string(),

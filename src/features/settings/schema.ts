@@ -5,6 +5,7 @@ export type {
   Settings,
   OnboardingSettings,
   VoiceInputSettings,
+  VoiceInputDisplayMode,
   TranscriptionSettings,
   ShortcutsSettings,
   SystemSettings,
@@ -21,6 +22,7 @@ export const defaultSettings: Settings = {
     microphoneDeviceId: null,
     enablePushToTalk: false,
     pushToTalkShortcut: 'Alt+R',
+    displayMode: 'standard',
   },
   transcription: {
     language: 'en',

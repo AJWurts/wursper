@@ -12,6 +12,7 @@ export function ShortcutsPanel() {
     setPushToTalkShortcut,
     setPasteShortcut,
     setGlobalShortcutsEnabled,
+    setEnablePushToTalk,
   } = useSettingsStore()
 
   return (
@@ -48,6 +49,24 @@ export function ShortcutsPanel() {
               placeholder="Not set"
               disabled={!settings.shortcuts.globalShortcutsEnabled}
             />
+          }
+        />
+
+        <SettingItem
+          title="Enable Push-to-Talk"
+          description={
+            settings.voiceInput.enablePushToTalk
+              ? 'Hold shortcut to record, release to stop'
+              : 'Toggle mode is active - click shortcut to start/stop'
+          }
+          action={
+            <Switch
+              checked={settings.voiceInput.enablePushToTalk}
+              onCheckedChange={setEnablePushToTalk}
+            />
+          }
+          info={
+            <SettingsInfoTooltip content="Push-to-Talk: Hold the shortcut key to record, release to stop. Toggle mode: Press once to start, press again to stop. Use Push-to-Talk for quick, hands-on recording." />
           }
         />
 
