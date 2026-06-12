@@ -26,7 +26,7 @@ function ToastWindowApp() {
   const startTimeRef = useRef<number | null>(null)
   const isHidingRef = useRef(false)
 
-  const hideToast = useCallback(async () => {
+  const hideToast = useCallback(() => {
     if (isHidingRef.current) return
     isHidingRef.current = true
 
@@ -37,7 +37,9 @@ function ToastWindowApp() {
     }
 
     setIsVisible(false)
-    await windowRef.current.hide()
+    // Fire-and-forget: don't await to prevent blocking React event loop
+    // This prevents hangs when multiple window operations happen concurrently
+    windowRef.current.hide().catch(() => {})
     setProgress(100)
     startTimeRef.current = null
     isHidingRef.current = false
@@ -65,7 +67,7 @@ function ToastWindowApp() {
     animationFrameRef.current = requestAnimationFrame(animate)
   }, [hideToast])
 
-  useTauriEvent<ToastMessage>('show_toast', async event => {
+  useTauriEvent<ToastMessage>('show_toast', event => {
     // Cancel any existing animation
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
@@ -79,8 +81,8 @@ function ToastWindowApp() {
     setProgress(100)
     setIsVisible(true)
 
-    // Show the window first
-    await windowRef.current.show()
+    // Don't call window.show() here - Rust already showed the window
+    // This prevents duplicate operations that can cause hangs
 
     // Small delay to ensure render, then start animation
     requestAnimationFrame(() => {

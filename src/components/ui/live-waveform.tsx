@@ -1,4 +1,4 @@
-import { useEffect, useRef, type HTMLAttributes } from 'react'
+import { useEffect, useRef, useState, type HTMLAttributes } from 'react'
 
 import { cn } from '@/lib/cn'
 
@@ -19,6 +19,8 @@ export type LiveWaveformProps = Omit<
   height?: string | number
   sensitivity?: number
   mode?: 'scrolling' | 'static'
+  /** Show breathing animation when idle (waiting for user to speak) */
+  breathingWhenIdle?: boolean
 }
 
 export const LiveWaveform = ({
@@ -35,6 +37,7 @@ export const LiveWaveform = ({
   height = 64,
   sensitivity = 1,
   mode = 'static',
+  breathingWhenIdle = false,
   className,
   ...props
 }: LiveWaveformProps) => {
@@ -47,6 +50,17 @@ export const LiveWaveform = ({
   const needsRedrawRef = useRef(true)
   const gradientCacheRef = useRef<CanvasGradient | null>(null)
   const lastWidthRef = useRef(0)
+  const breathingTimeRef = useRef(0)
+
+  // Check for prefers-reduced-motion
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setPrefersReducedMotion(mediaQuery.matches)
+    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
+    mediaQuery.addEventListener('change', handler)
+    return () => mediaQuery.removeEventListener('change', handler)
+  }, [])
 
   const heightStyle = typeof height === 'number' ? `${height}px` : height
 
@@ -81,6 +95,20 @@ export const LiveWaveform = ({
 
   // Handle processing animation (when not active)
   useEffect(() => {
+    // If reduced motion is preferred, skip all animations
+    if (prefersReducedMotion) {
+      if (processing && !active) {
+        // Show static processing bars
+        const barCount = Math.floor(
+          (containerRef.current?.getBoundingClientRect().width || 200) /
+            (barWidth + barGap)
+        )
+        staticBarsRef.current = new Array(barCount).fill(0.3)
+        needsRedrawRef.current = true
+      }
+      return
+    }
+
     if (processing && !active) {
       let time = 0
       transitionProgressRef.current = 0
@@ -161,7 +189,7 @@ export const LiveWaveform = ({
         fadeToIdle()
       }
     }
-  }, [processing, active, barWidth, barGap])
+  }, [processing, active, barWidth, barGap, prefersReducedMotion])
 
   // Track audio level for responsive animation
   const audioLevelRef = useRef(0)
@@ -199,21 +227,6 @@ export const LiveWaveform = ({
 
       // Animate when active - only bounce when talking
       if (active) {
-        // Smooth the audio level for fluid transitions
-        const targetLevel = audioLevelRef.current
-        smoothedLevelRef.current +=
-          (targetLevel - smoothedLevelRef.current) * 0.15
-        const level = smoothedLevelRef.current
-
-        // Higher threshold for "talking" detection - must be clearly speaking
-        const talkingThreshold = 0.15
-        const isTalking = level > talkingThreshold
-
-        // Only progress time when talking
-        if (isTalking) {
-          waveTimeRef.current += 0.04 // Slower for smoother animation
-        }
-
         const step = barWidth + barGap
         const barCount = Math.floor(rect.width / step)
         const halfCount = Math.floor(barCount / 2)
@@ -223,45 +236,76 @@ export const LiveWaveform = ({
           staticBarsRef.current = new Array(barCount).fill(0.08)
         }
 
-        const t = waveTimeRef.current
+        // If reduced motion is preferred, show static bars based on audio level
+        if (prefersReducedMotion) {
+          const level = audioLevelRef.current
+          const barHeight = 0.1 + level * 0.5
+          for (let i = 0; i < barCount; i++) {
+            const centerWeight = 1 - Math.abs((i - halfCount) / halfCount) * 0.4
+            staticBarsRef.current[i] = barHeight * centerWeight
+          }
+          needsRedrawRef.current = true
+        } else {
+          // Smooth the audio level for fluid transitions
+          const targetLevel = audioLevelRef.current
+          smoothedLevelRef.current +=
+            (targetLevel - smoothedLevelRef.current) * 0.15
+          const level = smoothedLevelRef.current
 
-        for (let i = 0; i < barCount; i++) {
-          const normalizedPosition = (i - halfCount) / halfCount
-          const centerWeight = 1 - Math.abs(normalizedPosition) * 0.4
+          // Higher threshold for "talking" detection - must be clearly speaking
+          const talkingThreshold = 0.15
+          const isTalking = level > talkingThreshold
 
-          // Each bar has unique properties
-          const seed1 = Math.sin(i * 12.9898) * 43758.5453
-          const seed2 = Math.sin(i * 78.233) * 43758.5453
-          const barSeed1 = seed1 - Math.floor(seed1)
-          const barSeed2 = seed2 - Math.floor(seed2)
-          const barAmplitude = 0.6 + barSeed2 * 0.4
-
-          let targetValue: number
-
+          // Only progress time when talking
           if (isTalking) {
-            // TALKING: Smooth animation based on audio level
-            const barSpeed = 0.5 + barSeed1 * 0.5
-            const oscillation = Math.sin(t * barSpeed * 2) * 0.5 + 0.5
-
-            // Height based on audio level with gentle oscillation
-            const levelFactor = Math.min(1, (level - talkingThreshold) / 0.5)
-            const baseHeight = 0.12 + levelFactor * 0.4 * barAmplitude
-            const variation = oscillation * 0.15 * barAmplitude * levelFactor
-
-            targetValue = Math.min(
-              0.9,
-              (baseHeight + variation) * centerWeight * sensitivity
-            )
-          } else {
-            // SILENT: Completely flat/minimal
-            targetValue = 0.08 * centerWeight
+            waveTimeRef.current += 0.04 // Slower for smoother animation
           }
 
-          // Smooth interpolation - gentle transitions
-          const current = staticBarsRef.current[i] || 0.08
-          const diff = targetValue - current
-          const smoothing = isTalking ? 0.08 : 0.04 // Slower, smoother
-          staticBarsRef.current[i] = Math.max(0.05, current + diff * smoothing)
+          const t = waveTimeRef.current
+
+          for (let i = 0; i < barCount; i++) {
+            const normalizedPosition = (i - halfCount) / halfCount
+            const centerWeight = 1 - Math.abs(normalizedPosition) * 0.4
+
+            // Each bar has unique properties
+            const seed1 = Math.sin(i * 12.9898) * 43758.5453
+            const seed2 = Math.sin(i * 78.233) * 43758.5453
+            const barSeed1 = seed1 - Math.floor(seed1)
+            const barSeed2 = seed2 - Math.floor(seed2)
+            const barAmplitude = 0.6 + barSeed2 * 0.4
+
+            let targetValue: number
+
+            if (isTalking) {
+              // TALKING: Smooth animation based on audio level
+              const barSpeed = 0.5 + barSeed1 * 0.5
+              const oscillation = Math.sin(t * barSpeed * 2) * 0.5 + 0.5
+
+              // Height based on audio level with gentle oscillation
+              const levelFactor = Math.min(1, (level - talkingThreshold) / 0.5)
+              const baseHeight = 0.12 + levelFactor * 0.4 * barAmplitude
+              const variation = oscillation * 0.15 * barAmplitude * levelFactor
+
+              targetValue = Math.min(
+                0.9,
+                (baseHeight + variation) * centerWeight * sensitivity
+              )
+            } else if (breathingWhenIdle) {
+              // IDLE WITH BREATHING: Gentle breathing animation
+              breathingTimeRef.current += 0.015
+              const breathPhase = Math.sin(breathingTimeRef.current) * 0.5 + 0.5
+              targetValue = (0.1 + breathPhase * 0.08) * centerWeight
+            } else {
+              // SILENT: Completely flat/minimal
+              targetValue = 0.08 * centerWeight
+            }
+
+            // Smooth interpolation - gentle transitions
+            const current = staticBarsRef.current[i] || 0.08
+            const diff = targetValue - current
+            const smoothing = isTalking ? 0.08 : 0.04 // Slower, smoother
+            staticBarsRef.current[i] = Math.max(0.05, current + diff * smoothing)
+          }
         }
 
         lastActiveDataRef.current = [...staticBarsRef.current]
@@ -371,6 +415,8 @@ export const LiveWaveform = ({
     fadeEdges,
     fadeWidth,
     mode,
+    breathingWhenIdle,
+    prefersReducedMotion,
   ])
 
   return (

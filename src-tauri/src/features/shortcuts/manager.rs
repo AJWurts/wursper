@@ -116,118 +116,33 @@ pub fn register_voice_input_shortcut(app: &App) -> Result<()> {
     Ok(())
 }
 
-/// Retrieves the voice input shortcut from settings
 fn get_voice_input_shortcut_from_settings(app: &AppHandle) -> String {
-    // Try cache first for faster access
-    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
-        if let Some(shortcut) = cache.get_voice_input_shortcut() {
-            return shortcut;
-        }
-    }
-    // Fallback to direct store access
-    let store = app.store("settings");
-    store
-        .ok()
-        .and_then(|store| store.get("settings"))
-        .and_then(|settings| {
-            settings
-                .as_object()
-                .and_then(|s| s.get("voiceInput"))
-                .and_then(|t| t.get("shortcut"))
-                .and_then(|m| m.as_str().map(String::from))
-        })
-        .unwrap_or("Alt+Space".to_string())
+    app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
+        .map(|cache| cache.get_voice_input_shortcut())
+        .unwrap_or_else(|| "Alt+Space".to_string())
 }
 
-/// Retrieves the PTT shortcut from settings
 fn get_ptt_shortcut_from_settings(app: &AppHandle) -> String {
-    // Try cache first for faster access
-    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
-        if let Some(shortcut) = cache.get_ptt_shortcut() {
-            return shortcut;
-        }
-    }
-    // Fallback to direct store access
-    let store = app.store("settings");
-    store
-        .ok()
-        .and_then(|store| store.get("settings"))
-        .and_then(|settings| {
-            settings
-                .as_object()
-                .and_then(|s| s.get("voiceInput"))
-                .and_then(|t| t.get("pushToTalkShortcut"))
-                .and_then(|m| m.as_str().map(String::from))
-        })
-        .unwrap_or("Alt+R".to_string())
+    app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
+        .map(|cache| cache.get_ptt_shortcut())
+        .unwrap_or_else(|| "Alt+R".to_string())
 }
 
-/// Retrieves the enable push-to-talk setting
 fn get_enable_push_to_talk_from_settings(app: &AppHandle) -> bool {
-    // Try cache first for faster access
-    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
-        if let Some(enabled) = cache.get_enable_push_to_talk() {
-            return enabled;
-        }
-    }
-    // Fallback to direct store access
-    let store = app.store("settings");
-    store
-        .ok()
-        .and_then(|store| store.get("settings"))
-        .and_then(|settings| {
-            settings
-                .as_object()
-                .and_then(|s| s.get("voiceInput"))
-                .and_then(|t| t.get("enablePushToTalk"))
-                .and_then(|m| m.as_bool())
-        })
+    app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
+        .map(|cache| cache.get_enable_push_to_talk())
         .unwrap_or(false)
 }
 
-/// Retrieves the command mode shortcut from settings
 fn get_command_mode_shortcut_from_settings(app: &AppHandle) -> String {
-    // Try cache first for faster access
-    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
-        if let Some(shortcut) = cache.get_command_mode_shortcut() {
-            return shortcut;
-        }
-    }
-    // Fallback to direct store access
-    let store = app.store("settings");
-    store
-        .ok()
-        .and_then(|store| store.get("settings"))
-        .and_then(|settings| {
-            settings
-                .as_object()
-                .and_then(|s| s.get("shortcuts"))
-                .and_then(|t| t.get("commandModeShortcut"))
-                .and_then(|m| m.as_str().map(String::from))
-        })
-        .unwrap_or("CmdOrCtrl+Shift+Space".to_string())
+    app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
+        .map(|cache| cache.get_command_mode_shortcut())
+        .unwrap_or_else(|| "CmdOrCtrl+Shift+Space".to_string())
 }
 
-/// Retrieves the enable command mode setting
 fn get_enable_command_mode_from_settings(app: &AppHandle) -> bool {
-    // Try cache first for faster access
-    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
-        if let Some(enabled) = cache.get_enable_command_mode() {
-            return enabled;
-        }
-    }
-    // Fallback to direct store access
-    let store = app.store("settings");
-    store
-        .ok()
-        .and_then(|store| store.get("settings"))
-        .and_then(|settings| {
-            settings
-                .as_object()
-                .and_then(|s| s.get("shortcuts"))
-                .and_then(|t| t.get("enableCommandMode"))
-                .and_then(|m| m.as_bool())
-        })
+    app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
+        .map(|cache| cache.get_enable_command_mode())
         .unwrap_or(false)
 }
 
@@ -639,27 +554,10 @@ pub async fn enable_global_shortcuts(
     Ok(())
 }
 
-/// Retrieves the paste shortcut from settings
 fn get_paste_shortcut_from_settings(app: &AppHandle) -> String {
-    // Try cache first for faster access
-    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
-        if let Some(shortcut) = cache.get_paste_shortcut() {
-            return shortcut;
-        }
-    }
-    // Fallback to direct store access
-    let store = app.store("settings");
-    store
-        .ok()
-        .and_then(|store| store.get("settings"))
-        .and_then(|settings| {
-            settings
-                .as_object()
-                .and_then(|s| s.get("shortcuts"))
-                .and_then(|t| t.get("pasteLastTranscript"))
-                .and_then(|m| m.as_str().map(String::from))
-        })
-        .unwrap_or("CmdOrCtrl+Shift+V".to_string())
+    app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
+        .map(|cache| cache.get_paste_shortcut())
+        .unwrap_or_else(|| "CmdOrCtrl+Shift+V".to_string())
 }
 
 /// Command to register PTT shortcut

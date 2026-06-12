@@ -355,16 +355,28 @@ pub fn resize_pill_window_expanded(_app: &AppHandle, _expanded: bool) -> tauri::
     Ok(())
 }
 
+/// Stub for non-macOS platforms
+#[cfg(not(target_os = "macos"))]
+pub fn stop_pill_window_monitor() {
+    // No-op on non-macOS platforms
+}
+
 /// Hide the pill window and deactivate the position monitor.
 pub fn hide_pill_window(app: &AppHandle) {
     use tauri::Manager;
 
+    log::debug!("hide_pill_window: starting");
+
     if let Some(window) = app.get_webview_window("voice-input") {
+        log::debug!("hide_pill_window: calling window.hide()");
         let _ = window.hide();
-        log::debug!("Pill window hidden");
+        log::debug!("hide_pill_window: window.hide() completed");
+    } else {
+        log::warn!("hide_pill_window: voice-input window not found");
     }
 
     set_pill_monitor_active(false);
+    log::debug!("hide_pill_window: completed");
 }
 
 /// Query all screen visible frames safely.
@@ -413,15 +425,42 @@ fn frames_changed(current: &[ScreenFrame], last: &[ScreenFrame]) -> bool {
     })
 }
 
+/// Shutdown signal for the pill window monitor
+#[cfg(target_os = "macos")]
+static MONITOR_SHUTDOWN: std::sync::OnceLock<Arc<AtomicBool>> = std::sync::OnceLock::new();
+
+/// Request the pill window monitor to stop.
+/// Call this during app shutdown to ensure clean exit.
+#[cfg(target_os = "macos")]
+pub fn stop_pill_window_monitor() {
+    if let Some(shutdown) = MONITOR_SHUTDOWN.get() {
+        log::info!("Requesting pill window monitor shutdown");
+        shutdown.store(true, Ordering::SeqCst);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn should_shutdown_monitor() -> bool {
+    MONITOR_SHUTDOWN
+        .get()
+        .map(|flag| flag.load(Ordering::SeqCst))
+        .unwrap_or(false)
+}
+
 #[cfg(target_os = "macos")]
 /// Starts monitoring dock/screen changes and repositions pill window when needed.
 ///
 /// Uses polling with adaptive intervals:
 /// - 500ms when actively recording (responsive to screen changes)
 /// - 2000ms when idle (reduced CPU usage)
+///
+/// The monitor can be stopped by calling `stop_pill_window_monitor()`.
 pub fn start_pill_window_monitor(app: AppHandle) {
     static MONITOR_RUNNING: std::sync::OnceLock<Arc<AtomicBool>> = std::sync::OnceLock::new();
     let running = MONITOR_RUNNING.get_or_init(|| Arc::new(AtomicBool::new(false)));
+
+    // Initialize shutdown signal
+    MONITOR_SHUTDOWN.get_or_init(|| Arc::new(AtomicBool::new(false)));
 
     if running.swap(true, Ordering::SeqCst) {
         log::debug!("Pill window monitor already running");
@@ -434,11 +473,26 @@ pub fn start_pill_window_monitor(app: AppHandle) {
         use tauri::Manager;
 
         let mut last_visible_frames: Vec<ScreenFrame> = Vec::new();
+        let mut loop_count: u64 = 0;
 
         loop {
+            // Check for shutdown signal
+            if should_shutdown_monitor() {
+                log::info!("Pill window monitor shutting down (after {} iterations)", loop_count);
+                break;
+            }
+
+            loop_count += 1;
+
             // Adaptive polling interval based on recording state
             let poll_interval = if is_monitor_active() { 500 } else { 2000 };
             tokio::time::sleep(tokio::time::Duration::from_millis(poll_interval)).await;
+
+            // Check for shutdown again after sleep
+            if should_shutdown_monitor() {
+                log::info!("Pill window monitor shutting down after sleep");
+                break;
+            }
 
             // Check if window exists before querying screens
             if app.get_webview_window("voice-input").is_none() {
@@ -465,6 +519,11 @@ pub fn start_pill_window_monitor(app: AppHandle) {
             }
 
             last_visible_frames = current_frames;
+        }
+
+        // Reset running flag so monitor can be restarted if needed
+        if let Some(running) = MONITOR_RUNNING.get() {
+            running.store(false, Ordering::SeqCst);
         }
     });
 }

@@ -8,6 +8,24 @@ import { AnalyticsEvents } from './events'
 
 const IS_DEVELOPMENT = import.meta.env.DEV
 
+// Track if PostHog has been initialized
+let posthogInitialized = false
+
+async function ensureInitialized(): Promise<boolean> {
+  if (posthogInitialized) return true
+
+  try {
+    // This will trigger PostHog initialization if not already done
+    await PostHog.getInstance()
+    posthogInitialized = true
+    console.log('[Analytics] PostHog initialized successfully')
+    return true
+  } catch (error) {
+    console.error('[Analytics] Failed to initialize PostHog:', error)
+    return false
+  }
+}
+
 async function capture(event: string, properties?: Record<string, unknown>) {
   // Never capture analytics in development mode
   if (IS_DEVELOPMENT) {
@@ -15,9 +33,17 @@ async function capture(event: string, properties?: Record<string, unknown>) {
   }
 
   try {
+    // Ensure PostHog is initialized before capturing
+    const initialized = await ensureInitialized()
+    if (!initialized) {
+      console.warn('[Analytics] Skipping event, PostHog not initialized:', event)
+      return
+    }
+
     await PostHog.capture(event, properties)
+    console.log('[Analytics] Event captured:', event)
   } catch (error) {
-    console.error('[Analytics] Failed to capture event:', error)
+    console.error('[Analytics] Failed to capture event:', event, error)
   }
 }
 

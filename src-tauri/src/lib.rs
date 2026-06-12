@@ -4,7 +4,6 @@ use tauri::Manager;
 use tauri::ActivationPolicy;
 
 use tauri_plugin_posthog::{PostHogConfig, PostHogOptions};
-use tauri_plugin_store::StoreExt;
 
 mod commands;
 mod error;
@@ -22,8 +21,8 @@ use features::audio::{
     cancel_recording, enumerate_audio_devices, force_reset_recording, get_recording_state,
     start_recording, stop_recording, AudioRecorder, RecordingStateManager,
 };
-use features::cache::SettingsCache;
 use features::data::{export_all_data, import_all_data, import_from_json};
+use features::settings::SettingsCache;
 use features::models::{
     auto_start_selected_models, debug_ai_settings, delete_local_model, download_local_model,
     get_all_models, get_local_model_status, start_local_model, stop_local_model, LocalModelManager,
@@ -68,31 +67,6 @@ fn get_device_id() -> Result<String, String> {
     machine_uid::get().map_err(|e| format!("Failed to get device ID: {}", e))
 }
 
-/// Invalidate the settings cache to reload from in-memory store.
-///
-/// IMPORTANT: This does NOT reload from disk. The frontend writes to the store
-/// first, then calls this to update the cache. This design prevents deadlocks
-/// when settings are changed while recording is active.
-///
-/// The cache uses atomic swap semantics, so this operation is very fast and
-/// won't block readers (e.g., the audio thread reading settings).
-#[tauri::command]
-async fn invalidate_settings_cache(app: tauri::AppHandle) -> Result<(), String> {
-    // Run on blocking thread pool to avoid any potential main thread blocking
-    let result = tokio::task::spawn_blocking(move || {
-        if let Some(cache) =
-            app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>()
-        {
-            cache.invalidate(&app)?;
-            log::debug!("Settings cache invalidated via command");
-        }
-        Ok::<(), String>(())
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?;
-
-    result
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -222,18 +196,16 @@ pub fn run() {
             app_version
         ));
 
-        let store = app
-            .store("settings")
-            .map_err(|e| format!("Failed to get settings store: {}", e))?;
-
-        // Initialize settings cache
+        // Initialize settings cache from store
         if let Some(cache) = app.try_state::<Arc<SettingsCache>>() {
-            if let Err(e) = cache.initialize(&app.handle()) {
+            if let Err(e) = features::settings::initialize(&app.handle(), &cache) {
                 log::warn!("Failed to initialize settings cache: {}", e);
             } else {
                 log::debug!("Settings cache initialized successfully");
             }
         }
+
+        let settings_cache = app.state::<Arc<SettingsCache>>().inner().clone();
 
         // Migrate API keys from legacy encrypted storage to system keychain
         // and sync hasApiKey flags with actual keychain state
@@ -271,16 +243,8 @@ pub fn run() {
         app.set_activation_policy(ActivationPolicy::Accessory);
         logger::info("App running in Accessory mode (no dock icon)");
 
-        // Check onboarding completion status
-        let onboarding_complete = if let Some(settings) = store.get("settings") {
-            settings
-                .get("onboarding")
-                .and_then(|onboarding| onboarding.get("completed"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        } else {
-            false // Default to not completed if no settings found
-        };
+        // Check onboarding completion status from cache
+        let onboarding_complete = settings_cache.get_onboarding_completed();
 
         let handle = app.app_handle();
 
@@ -413,7 +377,17 @@ pub fn run() {
             get_recording_audio_path,
             // System preferences
             set_show_in_dock,
-            invalidate_settings_cache,
+            // Settings
+            features::settings::commands::get_settings,
+            features::settings::commands::save_settings,
+            features::settings::commands::update_onboarding,
+            features::settings::commands::update_voice_input_settings,
+            features::settings::commands::update_transcription_settings,
+            features::settings::commands::update_shortcuts_settings,
+            features::settings::commands::update_system_settings,
+            features::settings::commands::update_privacy_settings,
+            features::settings::commands::update_ai_processing_settings,
+            features::settings::commands::reset_settings,
             // Data export/import
             export_all_data,
             import_all_data,
@@ -456,6 +430,13 @@ pub fn run() {
 /// without hanging indefinitely.
 fn cleanup_on_exit(model_manager: Arc<Mutex<LocalModelManager>>) {
     use std::time::Duration;
+
+    // Stop the pill window monitor first (this is quick and non-blocking)
+    #[cfg(target_os = "macos")]
+    {
+        log::info!("Stopping pill window monitor...");
+        features::window::stop_pill_window_monitor();
+    }
 
     // Try to unload the model with a timeout to prevent hanging
     let cleanup_timeout = Duration::from_secs(3);

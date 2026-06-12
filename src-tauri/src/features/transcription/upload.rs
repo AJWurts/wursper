@@ -19,6 +19,8 @@ use crate::features::recordings::metadata::{
 use crate::features::recordings::storage::{
     create_recording_folder, save_audio_file, save_metadata,
 };
+use crate::features::settings::SettingsCache;
+use crate::types::settings::Settings;
 use crate::utils::logger;
 
 use super::orchestrator_helpers::apply_ai_post_processing;
@@ -61,9 +63,11 @@ pub async fn transcribe_uploaded_file(
     request: UploadAudioRequest,
     app: AppHandle,
     local_model_state: State<'_, Arc<Mutex<LocalModelManager>>>,
+    settings_cache: State<'_, Arc<SettingsCache>>,
 ) -> Result<UploadTranscriptionResponse, String> {
     let start_time = Instant::now();
     let timestamp = chrono::Local::now().timestamp_millis();
+    let settings = (*settings_cache.get()).clone();
 
     logger::info(&format!(
         "Processing uploaded file: {} ({} bytes)",
@@ -72,15 +76,9 @@ pub async fn transcribe_uploaded_file(
     ));
 
     // Get selected transcription model
-    let selected_model = get_selected_model(&app)?;
+    let selected_model = get_selected_model(&app, &settings)?;
 
-    // Get settings early for transcription options
-    let settings = get_settings(&app)?;
-    let translate_to_english = settings
-        .get("transcription")
-        .and_then(|t| t.get("translateToEnglish"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let translate_to_english = settings.transcription.translate_to_english;
 
     // Create recording folder
     let recording_folder = create_recording_folder(&app, timestamp)?;
@@ -121,11 +119,7 @@ pub async fn transcribe_uploaded_file(
     }
 
     // Check AI post-processing settings
-    let ai_processing_enabled = settings
-        .get("aiProcessing")
-        .and_then(|a| a.get("enabled"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let ai_processing_enabled = settings.ai_processing.enabled;
 
     // Apply AI post-processing if enabled
     let (
@@ -226,13 +220,11 @@ pub async fn transcribe_uploaded_file(
     })
 }
 
-/// Get the selected speech-to-text model from settings
-fn get_selected_model(app: &AppHandle) -> Result<SelectedModel, String> {
-    let settings = get_settings(app)?;
+fn get_selected_model(app: &AppHandle, settings: &Settings) -> Result<SelectedModel, String> {
     let selected_model_id = settings
-        .get("transcription")
-        .and_then(|t| t.get("speechToTextModelId"))
-        .and_then(|v| v.as_str())
+        .transcription
+        .speech_to_text_model_id
+        .as_ref()
         .ok_or("No speech-to-text model selected in settings")?;
 
     let models_store = app
@@ -266,14 +258,6 @@ fn get_selected_model(app: &AppHandle) -> Result<SelectedModel, String> {
     }
 
     Err(format!("Model '{}' not found", selected_model_id))
-}
-
-fn get_settings(app: &AppHandle) -> Result<serde_json::Value, String> {
-    let store = app
-        .store("settings")
-        .map_err(|e| format!("Failed to get settings store: {}", e))?;
-
-    store.get("settings").ok_or("No settings found".to_string())
 }
 
 /// Get human-readable model name from model ID

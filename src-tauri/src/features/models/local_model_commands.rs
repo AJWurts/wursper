@@ -118,7 +118,17 @@ fn update_ai_settings(app: &AppHandle, model_id: &str) {
     );
 
     store.set("settings", settings);
+
+    log::debug!("HANG DIAGNOSTIC: About to save settings after model selection");
+    let start = std::time::Instant::now();
     let _ = store.save();
+    let elapsed = start.elapsed();
+    if elapsed.as_millis() > 200 {
+        log::warn!(
+            "HANG DIAGNOSTIC: Settings store.save() took {:?} (slow)",
+            elapsed
+        );
+    }
 }
 
 /// Stop (unload) a specific local model from memory

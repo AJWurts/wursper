@@ -1,4 +1,3 @@
-use serde_json::Value;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
@@ -6,6 +5,7 @@ use crate::features::ai_processing::{post_process_transcript, PostProcessingRequ
 use crate::features::recordings::metadata::{
     ApplicationContext, PromptContext, SnippetInfo, SystemContext,
 };
+use crate::types::settings::Settings;
 use crate::utils::app_categorization::{categorize_app, AppCategory};
 
 /// Result of AI post-processing
@@ -20,32 +20,19 @@ pub struct PostProcessingResult {
     pub provider: Option<String>,
 }
 
-/// Apply AI post-processing to transcription
 pub async fn apply_ai_post_processing(
     app: &AppHandle,
     raw_text: &str,
     focused_app_name: &str,
-    settings: &Value,
+    settings: &Settings,
 ) -> Result<PostProcessingResult, String> {
-    // Get AI processing settings
-    let ai_settings = settings
-        .get("aiProcessing")
-        .ok_or("AI processing settings not found")?;
+    log::debug!("AI processing check - enabled: {}", settings.ai_processing.enabled);
 
-    // Get enabled status
-    let ai_enabled = ai_settings
-        .get("enabled")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    log::debug!("AI processing check - enabled: {}", ai_enabled);
-
-    // Get post-processing model ID
-    let model_id = ai_settings
-        .get("postProcessingModelId")
-        .and_then(|v| v.as_str())
+    let model_id = settings
+        .ai_processing
+        .post_processing_model_id
+        .clone()
         .filter(|s| !s.is_empty())
-        .map(String::from)
         .ok_or_else(|| "No post-processing model selected".to_string())?;
 
     log::info!("Post-processing with model: {}", model_id);
@@ -142,7 +129,7 @@ pub async fn apply_ai_post_processing(
 }
 
 /// Get vocabulary words from store
-fn get_vocabulary_words(app: &AppHandle) -> Result<Option<Vec<String>>, String> {
+pub fn get_vocabulary_words(app: &AppHandle) -> Result<Option<Vec<String>>, String> {
     let store = app
         .store("vocabulary.json")
         .map_err(|e| format!("Failed to get vocabulary store: {}", e))?;
@@ -170,7 +157,7 @@ fn get_vocabulary_words(app: &AppHandle) -> Result<Option<Vec<String>>, String> 
 }
 
 /// Get snippets from store
-fn get_snippets(app: &AppHandle) -> Result<Option<Vec<SnippetData>>, String> {
+pub fn get_snippets(app: &AppHandle) -> Result<Option<Vec<SnippetData>>, String> {
     let store = app
         .store("snippets.json")
         .map_err(|e| format!("Failed to get snippets store: {}", e))?;

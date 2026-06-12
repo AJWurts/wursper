@@ -257,7 +257,10 @@ impl LocalLLMEngine for LlamaEngine {
             );
         }
 
-        let backend = self.backend.as_ref().unwrap();
+        let backend = self
+            .backend
+            .as_ref()
+            .ok_or("Backend not initialized (this should not happen)")?;
 
         let model_params = LlamaModelParams::default().with_n_gpu_layers(99);
 
@@ -299,8 +302,13 @@ impl LocalLLMEngine for LlamaEngine {
             .with_n_ctx(NonZeroU32::new(8192))
             .with_n_batch(4096);
 
+        let backend = self
+            .backend
+            .as_ref()
+            .ok_or("Backend not initialized - model may not be loaded")?;
+
         let mut ctx = model
-            .new_context(&self.backend.as_ref().unwrap(), ctx_params)
+            .new_context(backend, ctx_params)
             .map_err(|e| format!("Failed to create context: {}", e))?;
 
         let tokens = model

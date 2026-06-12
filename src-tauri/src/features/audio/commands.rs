@@ -19,14 +19,32 @@ const LOCK_TIMEOUT: Duration = Duration::from_secs(2);
 // Global debounce state using parking_lot for faster locking
 static LAST_COMMAND_TIME: parking_lot::Mutex<Option<Instant>> = parking_lot::Mutex::new(None);
 
-/// Try to acquire a parking_lot mutex with timeout
+/// Try to acquire a parking_lot mutex with timeout and diagnostic logging
 fn try_lock_with_timeout<T>(
     mutex: &Mutex<T>,
     timeout: Duration,
 ) -> Result<parking_lot::MutexGuard<'_, T>, String> {
-    mutex
-        .try_lock_for(timeout)
-        .ok_or_else(|| "Lock acquisition timed out - operation in progress".to_string())
+    let start = Instant::now();
+    log::debug!("Attempting to acquire lock with {:?} timeout...", timeout);
+
+    match mutex.try_lock_for(timeout) {
+        Some(guard) => {
+            let elapsed = start.elapsed();
+            if elapsed.as_millis() > 100 {
+                log::warn!("Lock acquired after {:?} (slow)", elapsed);
+            } else {
+                log::debug!("Lock acquired in {:?}", elapsed);
+            }
+            Ok(guard)
+        }
+        None => {
+            log::error!(
+                "HANG DIAGNOSTIC: Lock acquisition FAILED after {:?} timeout - this could cause app hang!",
+                timeout
+            );
+            Err("Lock acquisition timed out - operation in progress".to_string())
+        }
+    }
 }
 
 /// Hide the recording window
@@ -156,61 +174,53 @@ pub async fn start_recording(
         });
     }
 
-    // Get settings from cache (faster) with fallback to direct store access
+    log::debug!("HANG DIAGNOSTIC: Validation passed, getting settings from cache");
+
+    // Get settings from cache
     let (device_id, play_sound, display_mode) = if let Some(cache) =
-        app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>()
+        app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
     {
-        (
-            cache.get_microphone_device_id(),
-            cache.get_play_sound_on_recording().unwrap_or(true),
-            cache.get_display_mode(),
-        )
+        log::debug!("HANG DIAGNOSTIC: Got cache reference, reading settings");
+        let device = cache.get_microphone_device_id();
+        log::debug!("HANG DIAGNOSTIC: Got microphone device");
+        let sound = cache.get_play_sound_on_recording();
+        log::debug!("HANG DIAGNOSTIC: Got play sound setting");
+        let mode = cache.get_display_mode();
+        log::debug!("HANG DIAGNOSTIC: Got display mode");
+        (device, sound, mode)
     } else {
-        // Fallback to direct store access if cache not available
-        let store = app
-            .store("settings")
-            .map_err(|e| format!("Failed to get settings: {}", e))?;
-        let settings = store.get("settings");
-
-        let device_id = settings
-            .as_ref()
-            .and_then(|s| s.as_object())
-            .and_then(|obj| obj.get("voiceInput").and_then(|v| v.as_object()))
-            .and_then(|obj| obj.get("microphoneDeviceId"))
-            .and_then(|d| d.as_str())
-            .map(String::from);
-
-        let play_sound = settings
-            .as_ref()
-            .and_then(|s| s.as_object())
-            .and_then(|obj| obj.get("system").and_then(|sys| sys.as_object()))
-            .and_then(|obj| obj.get("playSoundOnRecording"))
-            .and_then(|p| p.as_bool())
-            .unwrap_or(true);
-
-        let display_mode = settings
-            .as_ref()
-            .and_then(|s| s.as_object())
-            .and_then(|obj| obj.get("voiceInput").and_then(|v| v.as_object()))
-            .and_then(|obj| obj.get("displayMode"))
-            .and_then(|d| d.as_str())
-            .and_then(|s| match s {
-                "standard" => Some(VoiceInputDisplayMode::Standard),
-                "minimal" => Some(VoiceInputDisplayMode::Minimal),
-                _ => None,
-            })
-            .unwrap_or(VoiceInputDisplayMode::Standard);
-
-        (device_id, play_sound, display_mode)
+        log::warn!("Settings cache not available, using defaults");
+        (None, true, VoiceInputDisplayMode::Standard)
     };
+
+    log::debug!("HANG DIAGNOSTIC: Settings retrieved, transitioning to Starting state");
 
     // Transition to Starting state
     state_manager
         .set_state(RecordingState::Starting)
         .map_err(|e| format!("State transition failed: {}", e))?;
 
-    // Emit state change
-    let _ = app.emit("recording-state-changed", RecordingState::Starting);
+    log::debug!("HANG DIAGNOSTIC: State transitioned, about to spawn emit");
+
+    // Emit state change - spawn to avoid blocking if any window isn't responding
+    // This is fire-and-forget since we don't need to wait for the emit to complete
+    {
+        let app_clone = app.clone();
+        log::debug!("HANG DIAGNOSTIC: Spawning emit task");
+        tauri::async_runtime::spawn(async move {
+            log::debug!("HANG DIAGNOSTIC: Inside spawned task, about to emit");
+            let emit_start = std::time::Instant::now();
+            let _ = app_clone.emit("recording-state-changed", RecordingState::Starting);
+            let emit_elapsed = emit_start.elapsed();
+            log::debug!(
+                "HANG DIAGNOSTIC: recording-state-changed emitted in {:?} (async)",
+                emit_elapsed
+            );
+        });
+        log::debug!("HANG DIAGNOSTIC: Spawn completed");
+    }
+
+    log::debug!("HANG DIAGNOSTIC: Continuing after emit spawn");
 
     let timestamp = chrono::Local::now().timestamp_millis();
     let recording_folder =
@@ -225,27 +235,41 @@ pub async fn start_recording(
         let _ = play_recording_start_sound();
     }
 
-    // Try to acquire recorder lock with timeout to prevent deadlocks
-    let mut recorder_guard = try_lock_with_timeout(&recorder, LOCK_TIMEOUT)?;
-
-    // Set app handle for emitting audio levels
-    recorder_guard.set_app_handle(app.clone());
-
-    // Show the voice input window with appropriate display mode
+    // IMPORTANT: Show the voice input window BEFORE acquiring the recorder lock
+    // Window IPC operations can block waiting for main thread. Moving this before
+    // lock acquisition prevents potential deadlocks.
+    //
+    // We use run_on_main_thread for the initial show to ensure it completes reliably.
     #[cfg(target_os = "macos")]
     {
         use tauri::Manager;
 
+        log::debug!("HANG DIAGNOSTIC: Getting voice-input window (before lock)");
         if let Some(window) = app.get_webview_window("voice-input") {
-            // Emit display mode to React BEFORE showing window to avoid button flash
-            let _ = app.emit(
-                "voice-input-mode",
-                VoiceInputModePayload {
-                    display_mode: display_mode.clone(),
-                },
-            );
+            // Show window on main thread to ensure it completes
+            // This avoids potential IPC blocking issues from async context
+            log::debug!("HANG DIAGNOSTIC: Scheduling window.show() on main thread");
+            let window_clone = window.clone();
+            let show_result = app
+                .run_on_main_thread(move || {
+                    log::debug!("HANG DIAGNOSTIC: Executing window.show() on main thread");
+                    let _ = window_clone.show();
+                    log::debug!("HANG DIAGNOSTIC: window.show() completed on main thread");
+                })
+                .map_err(|e| format!("Failed to run on main thread: {}", e));
+
+            if let Err(e) = show_result {
+                log::warn!("Failed to show window via main thread: {}", e);
+                // Fallback to direct show
+                let _ = window.show();
+            }
+
+            // Small yield to allow the window to fully initialize
+            tokio::task::yield_now().await;
 
             // Configure window size and position based on display mode
+            log::debug!("HANG DIAGNOSTIC: About to configure_pill_window_for_mode");
+            let config_start = std::time::Instant::now();
             if let Err(e) =
                 crate::features::window::configure_pill_window_for_mode(&app, &display_mode)
             {
@@ -256,15 +280,57 @@ pub async fn start_recording(
                     log::warn!("Failed to position pill window: {:?}", e);
                 }
             }
+            let config_elapsed = config_start.elapsed();
+            if config_elapsed.as_millis() > 50 {
+                log::warn!(
+                    "HANG DIAGNOSTIC: configure_pill_window_for_mode took {:?} (slow)",
+                    config_elapsed
+                );
+            } else {
+                log::debug!(
+                    "HANG DIAGNOSTIC: configure_pill_window_for_mode completed in {:?}",
+                    config_elapsed
+                );
+            }
 
-            let _ = window.show();
+            // Emit display mode to React (window is already visible)
+            // Use window.emit_to to target only the voice-input window
+            // This avoids potential issues with other windows blocking the emit
+            log::debug!("HANG DIAGNOSTIC: About to emit voice-input-mode to window");
+            let emit_start = std::time::Instant::now();
+            let _ = window.emit(
+                "voice-input-mode",
+                VoiceInputModePayload {
+                    display_mode: display_mode.clone(),
+                },
+            );
+            let emit_elapsed = emit_start.elapsed();
+            if emit_elapsed.as_millis() > 50 {
+                log::warn!(
+                    "HANG DIAGNOSTIC: voice-input-mode emit took {:?} (slow)",
+                    emit_elapsed
+                );
+            } else {
+                log::debug!("HANG DIAGNOSTIC: voice-input-mode emitted in {:?}", emit_elapsed);
+            }
 
             log::info!(
                 "Voice input window shown with mode {:?} before recording start",
                 display_mode
             );
+        } else {
+            log::warn!("HANG DIAGNOSTIC: voice-input window not found!");
         }
     }
+
+    // Now acquire recorder lock - window operations are complete
+    log::debug!("HANG DIAGNOSTIC: About to acquire recorder lock");
+    let mut recorder_guard = try_lock_with_timeout(&recorder, LOCK_TIMEOUT)?;
+    log::debug!("HANG DIAGNOSTIC: Recorder lock acquired");
+
+    // Set app handle for emitting audio levels
+    recorder_guard.set_app_handle(app.clone());
+    log::debug!("HANG DIAGNOSTIC: App handle set, starting recording");
 
     match recorder_guard.start_recording(&file_path, device_id) {
         Ok(_) => {
@@ -396,22 +462,11 @@ pub async fn stop_recording(
         });
     }
 
-    // Get play sound setting from cache (faster) with fallback
-    let play_sound = if let Some(cache) =
-        app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>()
-    {
-        cache.get_play_sound_on_recording().unwrap_or(true)
-    } else {
-        let store = app.store("settings").map_err(|e| e.to_string())?;
-        let settings = store.get("settings");
-        settings
-            .as_ref()
-            .and_then(|s| s.as_object())
-            .and_then(|obj| obj.get("system").and_then(|sys| sys.as_object()))
-            .and_then(|obj| obj.get("playSoundOnRecording"))
-            .and_then(|p| p.as_bool())
-            .unwrap_or(true)
-    };
+    // Get play sound setting from cache
+    let play_sound = app
+        .try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
+        .map(|cache| cache.get_play_sound_on_recording())
+        .unwrap_or(true);
 
     // Transition to Stopping state
     state_manager
@@ -495,15 +550,17 @@ pub async fn stop_recording(
                                     translate: transcription_settings.translate_to_english,
                                 };
 
-                            if let Some(local_model_state) =
+                            if let (Some(local_model_state), Some(settings_cache)) = (
                                 app_clone.try_state::<Arc<
                                     tokio::sync::Mutex<crate::features::models::LocalModelManager>,
-                                >>()
-                            {
+                                >>(),
+                                app_clone.try_state::<Arc<crate::features::settings::SettingsCache>>(),
+                            ) {
                                 match crate::features::transcription::orchestrator::transcribe_and_process(
                                     request,
                                     app_clone.clone(),
                                     local_model_state,
+                                    settings_cache,
                                 ).await {
                                     Ok(_) => {
                                         log::info!("Transcription completed successfully");
@@ -760,22 +817,11 @@ pub async fn cancel_recording(
         log::warn!("ShortcutManager not available, cannot unregister Escape");
     }
 
-    // Get play sound setting from cache (faster) with fallback
-    let play_sound = if let Some(cache) =
-        app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>()
-    {
-        cache.get_play_sound_on_recording().unwrap_or(true)
-    } else {
-        let store = app.store("settings").ok();
-        let settings = store.as_ref().and_then(|s| s.get("settings"));
-        settings
-            .as_ref()
-            .and_then(|s| s.as_object())
-            .and_then(|obj| obj.get("system").and_then(|sys| sys.as_object()))
-            .and_then(|obj| obj.get("playSoundOnRecording"))
-            .and_then(|p| p.as_bool())
-            .unwrap_or(true)
-    };
+    // Get play sound setting from cache
+    let play_sound = app
+        .try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
+        .map(|cache| cache.get_play_sound_on_recording())
+        .unwrap_or(true);
 
     if play_sound {
         let _ = play_error_sound();

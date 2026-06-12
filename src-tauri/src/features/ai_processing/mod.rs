@@ -26,6 +26,8 @@ pub struct PostProcessingRequest {
 pub struct CommandModeRequest {
     pub instruction: String,
     pub model_id: String,
+    pub vocabulary: Option<Vec<String>>,
+    pub snippets: Option<Vec<SnippetData>>,
 }
 
 /// Main command to post-process a transcript using AI
@@ -390,8 +392,11 @@ fn get_model_provider(model_id: &str) -> Result<String, String> {
 pub const INVALID_REQUEST_MARKER: &str = "[[DICTA_INVALID_REQUEST]]";
 
 /// Build the system prompt for command mode
-fn build_command_mode_prompt() -> String {
-    format!(
+fn build_command_mode_prompt(
+    vocabulary: Option<&Vec<String>>,
+    snippets: Option<&Vec<SnippetData>>,
+) -> String {
+    let mut prompt = format!(
         r#"You are a content generation assistant for a voice-to-text app. Your ONLY job is to generate text content that the user will paste and use somewhere.
 
 CRITICAL - DETECTING INVALID REQUESTS:
@@ -414,7 +419,37 @@ VALID requests that you SHOULD fulfill:
 - "Write code that..." → Generate the code
 - "Summarize this for a report..." → Generate the summary
 - "Text my wife..." → Generate the text message
-- Any request asking you to CREATE/WRITE/DRAFT content
+- Any request asking you to CREATE/WRITE/DRAFT content"#,
+        marker = INVALID_REQUEST_MARKER
+    );
+
+    // Add user's personal information from snippets
+    if let Some(snips) = snippets {
+        if !snips.is_empty() {
+            prompt.push_str("\n\nUSER'S PERSONAL INFORMATION (use these when relevant):");
+            prompt.push_str("\nThe user has provided the following personal details. Use them to personalize content:");
+            for snip in snips {
+                prompt.push_str(&format!(
+                    "\n- {}: {}",
+                    snip.trigger, snip.expansion
+                ));
+            }
+            prompt.push_str("\n\nExamples of when to use this information:");
+            prompt.push_str("\n- When writing emails, use the user's name for signing off");
+            prompt.push_str("\n- When mentioning contact details, use the provided email/phone");
+            prompt.push_str("\n- When referencing their role or company, use the provided values");
+        }
+    }
+
+    // Add vocabulary for proper spelling
+    if let Some(words) = vocabulary {
+        if !words.is_empty() {
+            prompt.push_str("\n\nCUSTOM VOCABULARY (use correct spellings):");
+            prompt.push_str(&format!("\n{}", words.join(", ")));
+        }
+    }
+
+    prompt.push_str(&format!(r#"
 
 CRITICAL RULES FOR VALID REQUESTS:
 1. Generate ONLY the requested content - no explanations, no meta-commentary
@@ -422,9 +457,10 @@ CRITICAL RULES FOR VALID REQUESTS:
 3. Use appropriate tone for the content type
 4. Start directly with the content - no prefixes like "Here's your email:" or "Sure, here is..."
 5. Be concise but complete
+6. USE THE USER'S PERSONAL INFORMATION when signing emails, messages, or any content that would include their name/details
 
 CONTENT TYPE DETECTION:
-- "email" → Professional email with greeting and closing
+- "email" → Professional email with greeting and closing (sign with user's name if available)
 - "message" or "text" → Casual text message style
 - "list" or "to-do" → Bulleted list
 - "code" → Well-formatted code
@@ -438,7 +474,8 @@ Hi John,
 
 I wanted to let you know that I'll be running late to tomorrow's meeting. I apologize for any inconvenience this may cause.
 
-Best regards
+Best regards,
+[User's name from snippets if available]
 
 Instruction: "Create a to-do list for launching the new feature"
 Output:
@@ -460,7 +497,9 @@ Output:
 
 Now generate content for the user's instruction."#,
         marker = INVALID_REQUEST_MARKER
-    )
+    ));
+
+    prompt
 }
 
 /// Result from command mode generation
@@ -481,10 +520,24 @@ pub async fn generate_from_command(
     log::info!("Command mode: generating content from instruction");
     log::debug!("Instruction: {}", request.instruction);
 
+    // Log vocabulary/snippets being used
+    if let Some(ref vocab) = request.vocabulary {
+        log::debug!("Command mode: using {} vocabulary words", vocab.len());
+    }
+    if let Some(ref snips) = request.snippets {
+        log::debug!("Command mode: using {} snippets", snips.len());
+        for snip in snips {
+            log::debug!("  Snippet: '{}' → '{}'", snip.trigger, snip.expansion);
+        }
+    }
+
     // Determine provider from model_id
     let provider = get_model_provider(&request.model_id)?;
 
-    let system_prompt = build_command_mode_prompt();
+    let system_prompt = build_command_mode_prompt(
+        request.vocabulary.as_ref(),
+        request.snippets.as_ref(),
+    );
 
     // Route to appropriate provider
     let generated_text = match provider.as_str() {

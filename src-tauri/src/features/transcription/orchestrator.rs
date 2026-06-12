@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{command, AppHandle, Emitter, Manager, State};
@@ -11,11 +10,15 @@ use crate::features::audio::{RecordingMode, RecordingState, RecordingStateManage
 use crate::features::clipboard;
 use crate::features::models::LocalModelManager;
 use crate::features::security;
+use crate::features::settings::SettingsCache;
+use crate::types::settings::Settings;
 use crate::utils::app_categorization::categorize_app;
 use crate::utils::logger;
+use crate::utils::retry::{with_retry, RetryConfig};
 
 use super::orchestrator_helpers::{
     apply_ai_post_processing, create_empty_prompt_context, get_model_name,
+    get_snippets, get_vocabulary_words,
 };
 use super::providers::{assemblyai, azure, deepgram, elevenlabs, google, local_whisper, openai};
 use super::vocabulary::get_transcription_context;
@@ -63,11 +66,14 @@ pub async fn transcribe_and_process(
     request: TranscribeRequest,
     app: AppHandle,
     local_model_state: State<'_, Arc<Mutex<LocalModelManager>>>,
+    settings_cache: State<'_, Arc<SettingsCache>>,
 ) -> Result<Option<TranscriptionRecord>, String> {
     let start_time = Instant::now();
+    // Get Arc<Settings> snapshot - avoids cloning entire struct
+    let settings = settings_cache.get();
 
     // Step 1: Get selected transcription model
-    let selected_model = get_selected_model(&app)?;
+    let selected_model = get_selected_model(&app, &settings)?;
 
     // Step 2: Get focused application
     let focused_app =
@@ -153,18 +159,29 @@ pub async fn transcribe_and_process(
             .map_err(|e| format!("Failed to emit state change: {}", e))?;
 
         // Get the post-processing model for command generation
-        let settings = get_settings(&app)?;
         let post_processing_model_id = settings
-            .get("aiProcessing")
-            .and_then(|a| a.get("postProcessingModelId"))
-            .and_then(|v| v.as_str())
+            .ai_processing
+            .post_processing_model_id
+            .as_ref()
             .ok_or("Command Mode requires AI processing to be enabled with a model selected")?;
+
+        // Get vocabulary and snippets for personalization
+        let vocabulary = get_vocabulary_words(&app).unwrap_or(None);
+        let snippets = get_snippets(&app).unwrap_or(None);
+
+        log::info!(
+            "Command mode: using {} vocabulary words and {} snippets",
+            vocabulary.as_ref().map(|v| v.len()).unwrap_or(0),
+            snippets.as_ref().map(|s| s.len()).unwrap_or(0)
+        );
 
         // Generate content using transcription as instruction
         let command_result = generate_from_command(
             CommandModeRequest {
                 instruction: raw_transcription.clone(),
                 model_id: post_processing_model_id.to_string(),
+                vocabulary,
+                snippets,
             },
             app.clone(),
         )
@@ -190,10 +207,10 @@ pub async fn transcribe_and_process(
                 app.emit("command-result-error", "This doesn't look like a content request. Try asking me to write, draft, or create something.")
                     .map_err(|e| format!("Failed to emit error: {}", e))?;
 
-                // Keep window open for 3 seconds to show error, then hide
+                // Use std::thread for delayed hide - tokio::spawn can deadlock with window IPC
                 let app_clone = app.clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(5000));
+                    std::thread::sleep(std::time::Duration::from_secs(5));
                     if let Err(e) = crate::features::window::hide_command_result_window(&app_clone)
                     {
                         log::warn!("Failed to hide command result window: {}", e);
@@ -247,11 +264,7 @@ pub async fn transcribe_and_process(
                 }
 
                 // Handle auto-paste for command mode
-                let auto_paste = settings
-                    .get("transcription")
-                    .and_then(|t| t.get("autoPaste"))
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
+                let auto_paste = settings.transcription.auto_paste;
 
                 // Hide command result window
                 if let Err(e) = crate::features::window::hide_command_result_window(&app) {
@@ -311,22 +324,13 @@ pub async fn transcribe_and_process(
     }
 
     // Step 6: Check if AI post-processing is enabled
-    let settings = get_settings(&app)?;
-    let ai_processing_enabled = settings
-        .get("aiProcessing")
-        .and_then(|a| a.get("enabled"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let ai_processing_enabled = settings.ai_processing.enabled;
 
     // Log AI processing configuration for debugging
     if ai_processing_enabled {
-        let post_processing_model_id = settings
-            .get("aiProcessing")
-            .and_then(|a| a.get("postProcessingModelId"))
-            .and_then(|v| v.as_str());
         log::info!(
             "AI post-processing enabled. Model ID: {:?}",
-            post_processing_model_id
+            settings.ai_processing.post_processing_model_id
         );
     } else {
         log::debug!("AI post-processing is disabled");
@@ -408,11 +412,7 @@ pub async fn transcribe_and_process(
     let app_category = categorize_app(&focused_app.name);
 
     // Step 10: Check if audio recordings should be saved
-    let save_audio_recordings = settings
-        .get("system")
-        .and_then(|s| s.get("saveAudioRecordings"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let save_audio_recordings = settings.system.save_audio_recordings;
 
     // Step 11: Handle audio file based on setting
     let audio_path = recording_folder.join("audio.wav");
@@ -463,17 +463,8 @@ pub async fn transcribe_and_process(
     save_metadata(&recording_folder, &metadata)?;
 
     // Step 14: Handle auto-paste/copy (do this BEFORE showing success toast)
-    let auto_paste = settings
-        .get("transcription")
-        .and_then(|t| t.get("autoPaste"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    let auto_copy_to_clipboard = settings
-        .get("transcription")
-        .and_then(|t| t.get("autoCopyToClipboard"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let auto_paste = settings.transcription.auto_paste;
+    let auto_copy_to_clipboard = settings.transcription.auto_copy_to_clipboard;
 
     if auto_paste {
         app.emit("hide_voice_input", ())
@@ -515,44 +506,13 @@ pub async fn transcribe_and_process(
     }))
 }
 
-/// Get settings from the settings store
-fn get_settings(app: &AppHandle) -> Result<Value, String> {
-    let store = app
-        .store("settings")
-        .map_err(|e| format!("Failed to get settings store: {}", e))?;
-
-    let mut settings = store
-        .get("settings")
-        .ok_or("No settings found in store")?
-        .clone();
-
-    // Ensure aiProcessing exists with defaults if missing
-    if settings.get("aiProcessing").is_none() {
-        if let Some(obj) = settings.as_object_mut() {
-            obj.insert(
-                "aiProcessing".to_string(),
-                serde_json::json!({
-                    "enabled": false,
-                    "postProcessingModelId": null
-                }),
-            );
-        }
-    }
-
-    Ok(settings)
-}
-
-/// Get the selected speech-to-text model from settings
-fn get_selected_model(app: &AppHandle) -> Result<SelectedModel, String> {
-    // Get selected model ID from settings
-    let settings = get_settings(app)?;
+fn get_selected_model(app: &AppHandle, settings: &Settings) -> Result<SelectedModel, String> {
     let selected_model_id = settings
-        .get("transcription")
-        .and_then(|t| t.get("speechToTextModelId"))
-        .and_then(|v| v.as_str())
+        .transcription
+        .speech_to_text_model_id
+        .as_ref()
         .ok_or("No speech-to-text model selected in settings")?;
 
-    // Get the model details from models store
     let models_store = app
         .store("models.json")
         .map_err(|e| format!("Failed to get models store: {}", e))?;
@@ -562,10 +522,8 @@ fn get_selected_model(app: &AppHandle) -> Result<SelectedModel, String> {
         .ok_or("No models found in store")?;
     let models = models_value.as_array().ok_or("Models is not an array")?;
 
-    // Find the model by ID
     for model_value in models {
         let model = model_value.as_object().ok_or("Model is not an object")?;
-
         let id = model.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
         if id == selected_model_id {
@@ -670,6 +628,9 @@ async fn transcribe_with_provider(
         );
     }
 
+    // Retry configuration for cloud STT providers
+    let retry_config = RetryConfig::for_stt_providers();
+
     let response = match model.provider.as_str() {
         "openai" => {
             let api_key = security::get_api_key_internal(app, &model.id)
@@ -677,14 +638,23 @@ async fn transcribe_with_provider(
                 .map_err(|_| "OpenAI API key not found. Please add your API key in settings.")?;
 
             // OpenAI Whisper supports prompt parameter for vocabulary hints
-            openai::transcribe_with_openai(
-                audio_data,
-                api_key,
-                Some(model.id.clone()),
-                language.clone(),
-                None,
-                prompt.clone(),
-            )
+            // Wrap with retry for transient network failures
+            let audio = audio_data.clone();
+            let key = api_key.clone();
+            let model_id = model.id.clone();
+            let lang = language.clone();
+            let p = prompt.clone();
+
+            with_retry(retry_config, || {
+                let audio = audio.clone();
+                let key = key.clone();
+                let model_id = model_id.clone();
+                let lang = lang.clone();
+                let p = p.clone();
+                async move {
+                    openai::transcribe_with_openai(audio, key, Some(model_id), lang, None, p).await
+                }
+            })
             .await?
         }
         "google" => {
@@ -700,8 +670,20 @@ async fn transcribe_with_provider(
                 .or(Some("en-US".to_string()));
 
             // Google Speech supports speechContexts for phrase hints
-            google::transcribe_with_google(audio_data, api_key, google_language, word_list.clone())
-                .await?
+            // Wrap with retry for transient network failures
+            let audio = audio_data.clone();
+            let key = api_key.clone();
+            let lang = google_language.clone();
+            let wl = word_list.clone();
+
+            with_retry(retry_config, || {
+                let audio = audio.clone();
+                let key = key.clone();
+                let lang = lang.clone();
+                let wl = wl.clone();
+                async move { google::transcribe_with_google(audio, key, lang, wl).await }
+            })
+            .await?
         }
         "local-whisper" => {
             // Local Whisper (whisper.cpp) supports initial_prompt
@@ -722,12 +704,18 @@ async fn transcribe_with_provider(
                     "ElevenLabs API key not found. Please add your API key in settings."
                 })?;
 
-            elevenlabs::transcribe_with_elevenlabs(
-                audio_data,
-                api_key,
-                Some(model.id.clone()),
-                None,
-            )
+            let audio = audio_data.clone();
+            let key = api_key.clone();
+            let model_id = model.id.clone();
+
+            with_retry(retry_config, || {
+                let audio = audio.clone();
+                let key = key.clone();
+                let model_id = model_id.clone();
+                async move {
+                    elevenlabs::transcribe_with_elevenlabs(audio, key, Some(model_id), None).await
+                }
+            })
             .await?
         }
         // Candle engine (Pure Rust with Metal GPU)
@@ -781,12 +769,18 @@ async fn transcribe_with_provider(
                     "AssemblyAI API key not found. Please add your API key in settings."
                 })?;
 
-            assemblyai::transcribe_with_assemblyai(
-                audio_data,
-                api_key,
-                language.clone(),
-                word_list.clone(),
-            )
+            let audio = audio_data.clone();
+            let key = api_key.clone();
+            let lang = language.clone();
+            let wl = word_list.clone();
+
+            with_retry(retry_config, || {
+                let audio = audio.clone();
+                let key = key.clone();
+                let lang = lang.clone();
+                let wl = wl.clone();
+                async move { assemblyai::transcribe_with_assemblyai(audio, key, lang, wl).await }
+            })
             .await?
         }
         // Deepgram - supports keywords for vocabulary
@@ -795,12 +789,18 @@ async fn transcribe_with_provider(
                 .await
                 .map_err(|_| "Deepgram API key not found. Please add your API key in settings.")?;
 
-            deepgram::transcribe_with_deepgram(
-                audio_data,
-                api_key,
-                language.clone(),
-                word_list.clone(),
-            )
+            let audio = audio_data.clone();
+            let key = api_key.clone();
+            let lang = language.clone();
+            let wl = word_list.clone();
+
+            with_retry(retry_config, || {
+                let audio = audio.clone();
+                let key = key.clone();
+                let lang = lang.clone();
+                let wl = wl.clone();
+                async move { deepgram::transcribe_with_deepgram(audio, key, lang, wl).await }
+            })
             .await?
         }
         // Azure Speech Services - supports phrase lists
@@ -818,13 +818,18 @@ async fn transcribe_with_provider(
                 }
             });
 
-            azure::transcribe_with_azure(
-                audio_data,
-                api_key,
-                None, // Use default region (eastus)
-                azure_language,
-                word_list.clone(),
-            )
+            let audio = audio_data.clone();
+            let key = api_key.clone();
+            let lang = azure_language.clone();
+            let wl = word_list.clone();
+
+            with_retry(retry_config, || {
+                let audio = audio.clone();
+                let key = key.clone();
+                let lang = lang.clone();
+                let wl = wl.clone();
+                async move { azure::transcribe_with_azure(audio, key, None, lang, wl).await }
+            })
             .await?
         }
         _ => return Err(format!("Unsupported provider: {}", model.provider)),

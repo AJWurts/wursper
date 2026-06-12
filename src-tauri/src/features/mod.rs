@@ -1,11 +1,11 @@
 pub mod ai_processing;
 pub mod audio;
-pub mod cache;
 pub mod clipboard;
 pub mod data;
 pub mod models;
 pub mod recordings;
 pub mod security;
+pub mod settings;
 pub mod shortcuts;
 pub mod transcription;
 pub mod updates;

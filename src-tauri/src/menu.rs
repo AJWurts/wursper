@@ -496,8 +496,12 @@ fn set_microphone_device(
         }
     }
 
-    // Save updated settings
+    // Save updated settings with timing diagnostic
     store.set("settings", settings);
+
+    log::debug!("HANG DIAGNOSTIC: About to save settings store (blocking disk I/O)");
+    let save_start = std::time::Instant::now();
+
     store.save().map_err(|e| {
         tauri::Error::Io(std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -505,10 +509,20 @@ fn set_microphone_device(
         ))
     })?;
 
-    // Invalidate settings cache to ensure it stays in sync
-    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
-        if let Err(e) = cache.invalidate(app) {
-            log::warn!("Failed to invalidate settings cache: {}", e);
+    let save_elapsed = save_start.elapsed();
+    if save_elapsed.as_millis() > 200 {
+        log::warn!(
+            "HANG DIAGNOSTIC: Settings store.save() took {:?} (slow disk I/O)",
+            save_elapsed
+        );
+    } else {
+        log::debug!("Settings store saved in {:?}", save_elapsed);
+    }
+
+    // Reload settings cache to ensure it stays in sync
+    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>() {
+        if let Err(e) = crate::features::settings::reload_cache(app, &cache) {
+            log::warn!("Failed to reload settings cache: {}", e);
         }
     }
 
@@ -621,8 +635,12 @@ fn set_transcription_language(
         }
     }
 
-    // Save updated settings
+    // Save updated settings with timing diagnostic
     store.set("settings", settings);
+
+    log::debug!("HANG DIAGNOSTIC: About to save language settings (blocking disk I/O)");
+    let save_start = std::time::Instant::now();
+
     store.save().map_err(|e| {
         tauri::Error::Io(std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -630,10 +648,20 @@ fn set_transcription_language(
         ))
     })?;
 
-    // Invalidate settings cache
-    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::cache::SettingsCache>>() {
-        if let Err(e) = cache.invalidate(app) {
-            log::warn!("Failed to invalidate settings cache: {}", e);
+    let save_elapsed = save_start.elapsed();
+    if save_elapsed.as_millis() > 200 {
+        log::warn!(
+            "HANG DIAGNOSTIC: Language store.save() took {:?} (slow disk I/O)",
+            save_elapsed
+        );
+    } else {
+        log::debug!("Language settings saved in {:?}", save_elapsed);
+    }
+
+    // Reload settings cache to ensure it stays in sync
+    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>() {
+        if let Err(e) = crate::features::settings::reload_cache(app, &cache) {
+            log::warn!("Failed to reload settings cache: {}", e);
         }
     }
 

@@ -43,6 +43,9 @@ impl RecordingShortcutHandler {
         app: &AppHandle,
         event: &ShortcutEvent,
     ) -> Result<(), String> {
+        let handler_start = Instant::now();
+        log::debug!("HANG DIAGNOSTIC: Toggle mode handler started");
+
         // Only respond to key press in toggle mode
         if event.state != ShortcutState::Pressed {
             return Ok(());
@@ -65,7 +68,15 @@ impl RecordingShortcutHandler {
                 // Set mode to Dictation when starting from idle
                 state_manager.set_recording_mode(RecordingMode::Dictation);
                 log::info!("Toggle mode: Starting recording in dictation mode");
+                let op_start = Instant::now();
                 start_recording(app.clone(), recorder.clone(), state_manager.clone()).await?;
+                let op_elapsed = op_start.elapsed();
+                if op_elapsed.as_millis() > 500 {
+                    log::warn!(
+                        "HANG DIAGNOSTIC: start_recording took {:?} (slow)",
+                        op_elapsed
+                    );
+                }
             }
             RecordingState::Recording => {
                 // Check if we're in Command mode - show toast if so
@@ -80,7 +91,15 @@ impl RecordingShortcutHandler {
                     return Ok(());
                 }
                 log::info!("Toggle mode: Stopping recording");
+                let op_start = Instant::now();
                 stop_recording(app.clone(), recorder.clone(), state_manager.clone()).await?;
+                let op_elapsed = op_start.elapsed();
+                if op_elapsed.as_millis() > 500 {
+                    log::warn!(
+                        "HANG DIAGNOSTIC: stop_recording took {:?} (slow)",
+                        op_elapsed
+                    );
+                }
             }
             RecordingState::Generating => {
                 // Show toast that we're generating content
@@ -98,6 +117,16 @@ impl RecordingShortcutHandler {
                     current_state
                 );
             }
+        }
+
+        let handler_elapsed = handler_start.elapsed();
+        if handler_elapsed.as_millis() > 1000 {
+            log::warn!(
+                "HANG DIAGNOSTIC: Toggle mode handler took {:?} total (very slow)",
+                handler_elapsed
+            );
+        } else {
+            log::debug!("Toggle mode handler completed in {:?}", handler_elapsed);
         }
 
         Ok(())

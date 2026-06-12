@@ -68,8 +68,26 @@ export const VoiceInput = () => {
     return null
   }
 
+  // Generate status message for screen readers
+  const getStatusMessage = () => {
+    if (recording.state === 'transcribing') return 'Processing transcription'
+    if (recording.state === 'stopping') return 'Stopping recording'
+    if (recording.isRecording) return 'Recording in progress'
+    return 'Ready to record'
+  }
+
   return (
     <VoiceInputContainer mode={displayMode}>
+      {/* ARIA live region for screen reader announcements */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {getStatusMessage()}
+      </div>
+
       {showButtons && (
         <CancelButton
           onClick={recording.cancelRecording}
@@ -93,6 +111,7 @@ export const VoiceInput = () => {
             sensitivity={3.5}
             fadeEdges
             fadeWidth={10}
+            breathingWhenIdle
             className="h-full w-full"
           />
         )}

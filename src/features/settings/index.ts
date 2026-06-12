@@ -1,2 +1,2 @@
-export { useSettingsStore, initializeSettings } from './store'
+export { useSettingsStore, initializeSettings, setupSettingsSync } from './store'
 export type { SettingsStore } from './types'

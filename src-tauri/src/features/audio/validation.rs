@@ -174,12 +174,16 @@ pub async fn validate_pre_recording(app: &AppHandle) -> Result<(), ValidationErr
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    log::debug!("AI processing enabled: {}", ai_processing_enabled);
+
     if ai_processing_enabled {
         if let Some(post_processing_model_id) = settings
             .get("aiProcessing")
             .and_then(|ai| ai.get("postProcessingModelId"))
             .and_then(|v| v.as_str())
         {
+            log::info!("Validating post-processing model: {}", post_processing_model_id);
+
             // Find the model
             if let Some(model) = models.iter().find(|m| {
                 m.as_object()
@@ -198,11 +202,34 @@ pub async fn validate_pre_recording(app: &AppHandle) -> Result<(), ValidationErr
                         .unwrap_or(post_processing_model_id);
                     let model_type = model_obj.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
+                    log::info!(
+                        "Post-processing model: {} (provider: {}, type: {})",
+                        model_name,
+                        provider,
+                        model_type
+                    );
+
                     // Only check API key for cloud models
                     if model_type == "cloud" && post_processing_provider_requires_api_key(provider)
                     {
+                        log::debug!(
+                            "HANG DIAGNOSTIC: About to check keychain for post-processing model {} - this may block!",
+                            post_processing_model_id
+                        );
+                        let keychain_start = std::time::Instant::now();
+
                         // Check if API key exists
-                        if !security::has_api_key_internal(post_processing_model_id) {
+                        let has_key = security::has_api_key_internal(post_processing_model_id);
+
+                        let keychain_elapsed = keychain_start.elapsed();
+                        if keychain_elapsed.as_millis() > 100 {
+                            log::warn!(
+                                "HANG DIAGNOSTIC: Post-processing keychain check took {:?}",
+                                keychain_elapsed
+                            );
+                        }
+
+                        if !has_key {
                             return Err(ValidationError::PostProcessingApiKeyMissing {
                                 model_id: post_processing_model_id.to_string(),
                                 model_name: model_name.to_string(),
@@ -215,5 +242,6 @@ pub async fn validate_pre_recording(app: &AppHandle) -> Result<(), ValidationErr
         }
     }
 
+    log::info!("=== PRE-RECORDING VALIDATION COMPLETE (SUCCESS) ===");
     Ok(())
 }

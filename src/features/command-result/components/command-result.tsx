@@ -57,24 +57,14 @@ export function CommandResult() {
             }}
             className="flex h-[160px] w-full flex-col rounded-2xl border border-white/12 bg-gradient-to-br from-black via-neutral-950 to-black p-4"
           >
-            {/* Top section: "I heard" + transcription */}
+            {/* Top section: transcription */}
             <div className="min-h-0 flex-1">
-              {/* "I heard" label */}
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.1 }}
-                className="mb-1.5 text-[9px] font-medium uppercase tracking-wider text-zinc-500"
-              >
-                I heard
-              </motion.p>
-
               {/* Transcription text - with max height and fade mask for overflow */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15, duration: 0.3 }}
-                className="relative max-h-[60px] overflow-hidden"
+                className="relative max-h-[80px] overflow-hidden"
               >
                 <p className="text-[13px] leading-relaxed text-white/90">
                   {transcription}

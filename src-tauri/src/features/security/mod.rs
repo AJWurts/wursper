@@ -28,9 +28,17 @@ static API_KEY_CACHE: RwLock<Option<HashMap<String, Option<String>>>> = RwLock::
 
 /// Initialize the cache
 fn ensure_cache_initialized() {
+    let start = std::time::Instant::now();
     let mut cache = API_KEY_CACHE.write();
     if cache.is_none() {
         *cache = Some(HashMap::new());
+    }
+    let elapsed = start.elapsed();
+    if elapsed.as_millis() > 50 {
+        log::warn!(
+            "HANG DIAGNOSTIC: API key cache init took {:?} (slow)",
+            elapsed
+        );
     }
 }
 
@@ -131,6 +139,7 @@ pub async fn has_api_key(_app: AppHandle, model_id: String) -> Result<bool, Stri
 pub async fn get_api_key_internal(_app: &AppHandle, model_id: &str) -> Result<String, String> {
     // Check cache first
     if let Some(cached) = get_cached_key(model_id) {
+        log::debug!("API key for {} found in cache (fast path)", model_id);
         return Ok(cached);
     }
 
@@ -140,7 +149,26 @@ pub async fn get_api_key_internal(_app: &AppHandle, model_id: &str) -> Result<St
     }
 
     // Fetch from keychain and cache it
-    match keychain::get_api_key_keychain(model_id) {
+    log::debug!(
+        "HANG DIAGNOSTIC: About to access keychain for model {} - this could block if keychain is locked",
+        model_id
+    );
+    let start = std::time::Instant::now();
+
+    let result = keychain::get_api_key_keychain(model_id);
+    let elapsed = start.elapsed();
+
+    if elapsed.as_millis() > 500 {
+        log::warn!(
+            "HANG DIAGNOSTIC: Keychain access for {} took {:?} (very slow - possible user prompt)",
+            model_id,
+            elapsed
+        );
+    } else if elapsed.as_millis() > 100 {
+        log::info!("Keychain access for {} took {:?}", model_id, elapsed);
+    }
+
+    match result {
         Ok(api_key) => {
             cache_key(model_id, &api_key);
             Ok(api_key)
@@ -157,11 +185,30 @@ pub async fn get_api_key_internal(_app: &AppHandle, model_id: &str) -> Result<St
 pub fn has_api_key_internal(model_id: &str) -> bool {
     // Check cache first
     if let Some(has_key) = has_cached_key(model_id) {
+        log::debug!("API key for {} found in cache: {}", model_id, has_key);
         return has_key;
     }
 
+    log::debug!(
+        "HANG DIAGNOSTIC: Checking keychain for {} (not in cache) - this is BLOCKING and may cause hang!",
+        model_id
+    );
+    let start = std::time::Instant::now();
+
     // Check keychain and cache result
     let has_key = keychain::has_api_key_keychain(model_id);
+
+    let elapsed = start.elapsed();
+    if elapsed.as_millis() > 100 {
+        log::warn!(
+            "HANG DIAGNOSTIC: Keychain has_api_key for {} took {:?} (slow - possible system dialog)",
+            model_id,
+            elapsed
+        );
+    } else {
+        log::debug!("Keychain check for {} completed in {:?}: {}", model_id, elapsed, has_key);
+    }
+
     if has_key {
         // We know it exists, but we don't have the actual key yet
         // Don't cache the key itself - let get_api_key_internal do that
@@ -239,7 +286,16 @@ pub async fn sync_api_key_flags(app: &AppHandle) -> Result<(), String> {
 
     if synced_count > 0 {
         store.set("models", Value::Array(models));
+        log::debug!("HANG DIAGNOSTIC: About to save models store after API key sync");
+        let start = std::time::Instant::now();
         store.save().map_err(|e| format!("Failed to save: {}", e))?;
+        let elapsed = start.elapsed();
+        if elapsed.as_millis() > 200 {
+            log::warn!(
+                "HANG DIAGNOSTIC: Models store.save() took {:?} (slow)",
+                elapsed
+            );
+        }
     }
 
     log::info!(
@@ -279,7 +335,17 @@ fn update_has_api_key_flag(app: &AppHandle, model_id: &str, has_key: bool) -> Re
     }
 
     store.set("models", Value::Array(models));
+
+    log::debug!("HANG DIAGNOSTIC: About to save models store after API key flag update");
+    let start = std::time::Instant::now();
     store.save().map_err(|e| format!("Failed to save: {}", e))?;
+    let elapsed = start.elapsed();
+    if elapsed.as_millis() > 200 {
+        log::warn!(
+            "HANG DIAGNOSTIC: Models store.save() took {:?} (slow)",
+            elapsed
+        );
+    }
 
     Ok(())
 }

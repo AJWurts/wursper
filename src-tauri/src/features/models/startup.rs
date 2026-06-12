@@ -35,8 +35,18 @@ fn update_ai_settings_for_llm(app: &AppHandle, model_id: &str) {
     );
 
     store.set("settings", settings);
+
+    log::debug!("HANG DIAGNOSTIC: About to save settings during startup model selection");
+    let start = std::time::Instant::now();
     if let Err(e) = store.save() {
         log::error!("Failed to save settings: {}", e);
+    }
+    let elapsed = start.elapsed();
+    if elapsed.as_millis() > 200 {
+        log::warn!(
+            "HANG DIAGNOSTIC: Startup settings store.save() took {:?} (slow)",
+            elapsed
+        );
     }
 }
 
