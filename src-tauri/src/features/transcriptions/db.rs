@@ -202,3 +202,79 @@ pub fn clear_transcriptions(db: State<'_, TranscriptionDb>) -> Result<(), String
 
     Ok(())
 }
+
+#[cfg(test)]
+pub(super) mod tests {
+    use super::*;
+
+    pub fn open_test_db() -> Connection {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        conn.execute_batch(CREATE_TABLE_SQL).expect("create table");
+        conn
+    }
+
+    pub fn record(id: &str, text: &str, timestamp: i64) -> TranscriptionRecord {
+        TranscriptionRecord {
+            id: id.to_string(),
+            text: text.to_string(),
+            timestamp,
+            duration: Some(1.5),
+            word_count: text.split_whitespace().count() as u32,
+            model_id: "whisper-base".to_string(),
+            provider: "local".to_string(),
+        }
+    }
+
+    fn list_all(conn: &Connection) -> Vec<TranscriptionRecord> {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, text, timestamp, duration, word_count, model_id, provider
+                 FROM transcriptions ORDER BY timestamp DESC",
+            )
+            .unwrap();
+        stmt.query_map([], row_to_record)
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn insert_and_list_newest_first() {
+        let conn = open_test_db();
+        insert_record(&conn, &record("a", "first words", 100)).unwrap();
+        insert_record(&conn, &record("b", "second", 200)).unwrap();
+
+        let records = list_all(&conn);
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].id, "b");
+        assert_eq!(records[1].id, "a");
+        assert_eq!(records[1].text, "first words");
+        assert_eq!(records[1].word_count, 2);
+        assert_eq!(records[1].duration, Some(1.5));
+    }
+
+    #[test]
+    fn insert_same_id_replaces() {
+        let conn = open_test_db();
+        insert_record(&conn, &record("a", "original", 100)).unwrap();
+        insert_record(&conn, &record("a", "edited", 100)).unwrap();
+
+        let records = list_all(&conn);
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].text, "edited");
+    }
+
+    #[test]
+    fn delete_and_clear() {
+        let conn = open_test_db();
+        insert_record(&conn, &record("a", "one", 1)).unwrap();
+        insert_record(&conn, &record("b", "two", 2)).unwrap();
+
+        conn.execute("DELETE FROM transcriptions WHERE id = ?1", ["a"])
+            .unwrap();
+        assert_eq!(list_all(&conn).len(), 1);
+
+        conn.execute("DELETE FROM transcriptions", []).unwrap();
+        assert!(list_all(&conn).is_empty());
+    }
+}

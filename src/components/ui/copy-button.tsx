@@ -45,16 +45,7 @@ function CopyButton({
           })
       }
     },
-    [
-      onClick,
-      copied,
-      content,
-      setIsCopied,
-      onCopiedChange,
-      delay,
-      capture,
-      events,
-    ]
+    [onClick, copied, content, setIsCopied, onCopiedChange, delay]
   )
 
   return (

@@ -38,8 +38,6 @@ export async function updateTranscriptionSettings(params: {
 export async function updateShortcutsSettings(params: {
   pasteLastTranscript?: string
   globalShortcutsEnabled?: boolean
-  enableCommandMode?: boolean
-  commandModeShortcut?: string
 }): Promise<void> {
   return invoke('update_shortcuts_settings', params)
 }

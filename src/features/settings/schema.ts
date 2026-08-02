@@ -34,8 +34,6 @@ export const defaultSettings: Settings = {
   shortcuts: {
     pasteLastTranscript: 'CmdOrCtrl+Shift+V',
     globalShortcutsEnabled: true,
-    enableCommandMode: false,
-    commandModeShortcut: 'CmdOrCtrl+Shift+Space',
   },
   system: {
     showInDock: false,

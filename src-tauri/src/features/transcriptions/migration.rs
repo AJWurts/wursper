@@ -89,3 +89,71 @@ pub fn import_legacy_store(app_data_dir: &Path, conn: &Connection) -> Result<(),
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::db::tests::{open_test_db, record};
+    use super::*;
+
+    fn count(conn: &Connection) -> i64 {
+        conn.query_row("SELECT COUNT(*) FROM transcriptions", [], |row| row.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn imports_legacy_json_and_renames_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = dir.path().join(LEGACY_FILE);
+        std::fs::write(
+            &legacy,
+            r#"{"transcriptions":[
+                {"id":"one","text":"hello there","timestamp":100},
+                {"id":"two","text":"bye","timestamp":200,"wordCount":9,"modelId":"m","provider":"p"}
+            ]}"#,
+        )
+        .unwrap();
+
+        let conn = open_test_db();
+        import_legacy_store(dir.path(), &conn).unwrap();
+
+        assert_eq!(count(&conn), 2);
+        // Missing wordCount falls back to a whitespace count.
+        let wc: i64 = conn
+            .query_row(
+                "SELECT word_count FROM transcriptions WHERE id = 'one'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(wc, 2);
+        assert!(!legacy.exists());
+        assert!(dir.path().join(MIGRATED_SUFFIX).is_file());
+    }
+
+    #[test]
+    fn skips_import_when_table_already_populated() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(LEGACY_FILE),
+            r#"{"transcriptions":[{"id":"legacy","text":"old","timestamp":1}]}"#,
+        )
+        .unwrap();
+
+        let conn = open_test_db();
+        crate::features::transcriptions::db::insert_record(&conn, &record("existing", "kept", 5))
+            .unwrap();
+        import_legacy_store(dir.path(), &conn).unwrap();
+
+        assert_eq!(count(&conn), 1);
+        // File stays in place so nothing is lost.
+        assert!(dir.path().join(LEGACY_FILE).is_file());
+    }
+
+    #[test]
+    fn missing_legacy_file_is_a_noop() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = open_test_db();
+        import_legacy_store(dir.path(), &conn).unwrap();
+        assert_eq!(count(&conn), 0);
+    }
+}

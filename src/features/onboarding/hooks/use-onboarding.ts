@@ -60,7 +60,7 @@ export function useOnboarding() {
     if (currentStepData) {
       markStepComplete(currentStepData.id)
     }
-  }, [currentStepData, markStepComplete, currentStep, capture, events])
+  }, [currentStepData, markStepComplete, currentStep])
 
   const completeCurrentStepAndGoNext = useCallback(() => {
     completeCurrentStep()
@@ -83,8 +83,6 @@ export function useOnboarding() {
     isLastStep,
     navigate,
     setOnboardingComplete,
-    capture,
-    events,
     steps.length,
   ])
 
