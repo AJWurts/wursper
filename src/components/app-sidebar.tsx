@@ -1,14 +1,5 @@
-import {
-  BarChart3,
-  Home,
-  Palette,
-  Brain,
-  Settings,
-  SquareBottomDashedScissors,
-  BookOpen,
-  Sparkles,
-} from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Home, Brain, Settings, Sparkles, CircleHelp } from 'lucide-react'
+import { useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useLocation, Link } from 'react-router-dom'
 
@@ -25,7 +16,6 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from '@/components/ui/sidebar'
-import { useAnalytics } from '@/lib/analytics'
 
 import { DictaVersion } from './dicta-version'
 import { DictaLogo } from './ui/dicta-logo'
@@ -38,44 +28,20 @@ const menuItems = [
     path: '/',
   },
   {
-    title: 'Snippets',
-    icon: SquareBottomDashedScissors,
-    path: '/snippets',
-  },
-  {
-    title: 'Vocabulary',
-    icon: BookOpen,
-    path: '/vocabulary',
-  },
-  {
-    title: 'Vibes',
-    icon: Palette,
-    path: '/vibes',
-  },
-  {
     title: 'Models',
     icon: Brain,
     path: '/models',
   },
   {
-    title: 'Stats',
-    icon: BarChart3,
-    path: '/stats',
+    title: 'Help',
+    icon: CircleHelp,
+    path: '/help',
   },
 ]
 
 export function AppSidebar() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const location = useLocation()
-  const { trackPageView } = useAnalytics()
-
-  // Track page views when location changes
-  useEffect(() => {
-    const pageName =
-      menuItems.find(item => item.path === location.pathname)?.title ||
-      'Unknown'
-    trackPageView(pageName, { path: location.pathname })
-  }, [location.pathname, trackPageView])
 
   // Keyboard shortcut for settings: Cmd+,
   useHotkeys('mod+comma', () => setSettingsOpen(true), {
@@ -90,7 +56,7 @@ export function AppSidebar() {
             <div className="flex items-center gap-2.5 px-1">
               <DictaLogo size={22} className="text-primary" />
               <span className="text-base font-semibold tracking-tight text-foreground sour-gummy">
-                Dicta
+                Wursper
               </span>
             </div>
           </SidebarHeader>

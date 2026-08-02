@@ -28,7 +28,7 @@ interface OnboardingState {
 const initialSteps: OnboardingStep[] = [
   {
     id: 'welcome',
-    title: 'Welcome to Dicta!',
+    title: 'Welcome to Wursper!',
     description: 'Get up and running in 3 minutes',
     icon: 'rocket',
     completed: false,

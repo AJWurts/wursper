@@ -10,4 +10,4 @@ pub use commands::{
 };
 pub use devices::enumerate_audio_devices;
 pub use recorder::AudioRecorder;
-pub use state::{RecordingMode, RecordingState, RecordingStateManager};
+pub use state::{RecordingState, RecordingStateManager};

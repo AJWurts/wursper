@@ -9,8 +9,6 @@
 //! - Consistent with other locks in the codebase
 
 pub mod keychain;
-pub mod legacy;
-pub mod migration;
 
 use parking_lot::RwLock;
 use serde_json::Value;
@@ -206,7 +204,12 @@ pub fn has_api_key_internal(model_id: &str) -> bool {
             elapsed
         );
     } else {
-        log::debug!("Keychain check for {} completed in {:?}: {}", model_id, elapsed, has_key);
+        log::debug!(
+            "Keychain check for {} completed in {:?}: {}",
+            model_id,
+            elapsed,
+            has_key
+        );
     }
 
     if has_key {

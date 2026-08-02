@@ -36,7 +36,7 @@ export function OnboardingLayout({ children }: OnboardingLayoutProps) {
       <header className="relative z-10 flex items-center justify-between px-8 pt-12 pb-6">
         <div className="flex items-center gap-2.5">
           <DictaLogo size={24} className="text-primary" />
-          <span className="text-base font-medium tracking-tight">Dicta</span>
+          <span className="text-base font-medium tracking-tight">Wursper</span>
         </div>
         <StepProgress totalSteps={steps.length} currentStep={currentStep} />
       </header>

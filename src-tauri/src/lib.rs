@@ -3,8 +3,6 @@ use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
 
-use tauri_plugin_posthog::{PostHogConfig, PostHogOptions};
-
 mod commands;
 mod error;
 mod features;
@@ -16,30 +14,27 @@ mod utils;
 use commands::{check_speech_recognition_permission, request_speech_recognition_permission};
 use menu::rebuild_tray_menu_command;
 
-use features::ai_processing::post_process_transcript;
 use features::audio::{
     cancel_recording, enumerate_audio_devices, force_reset_recording, get_recording_state,
     start_recording, stop_recording, AudioRecorder, RecordingStateManager,
 };
-use features::data::{export_all_data, import_all_data, import_from_json};
-use features::settings::SettingsCache;
 use features::models::{
-    auto_start_selected_models, debug_ai_settings, delete_local_model, download_local_model,
-    get_all_models, get_local_model_status, start_local_model, stop_local_model, LocalModelManager,
+    auto_start_selected_models, delete_local_model, download_local_model, get_all_models,
+    get_local_model_status, start_local_model, stop_local_model, LocalModelManager,
 };
-use features::recordings::{delete_recording, get_all_transcriptions, get_recording_audio_path};
+use features::recordings::{delete_recording, get_recording_audio_path};
 use features::security::{get_api_key, has_api_key, remove_api_key, store_api_key};
+use features::settings::SettingsCache;
 use features::shortcuts::{
-    disable_global_shortcuts, enable_global_shortcuts, register_command_mode_shortcut,
-    register_escape_shortcut, register_ptt_shortcut, unregister_command_mode_shortcut,
-    unregister_escape_shortcut, unregister_ptt_shortcut, update_command_mode_shortcut,
+    disable_global_shortcuts, enable_global_shortcuts, register_escape_shortcut,
+    register_ptt_shortcut, unregister_escape_shortcut, unregister_ptt_shortcut,
     update_paste_shortcut, update_ptt_shortcut, update_voice_input_shortcut,
     RecordingShortcutHandler, ShortcutManager,
 };
-use features::transcription::{
-    get_last_transcript, paste_last_transcript, transcribe_and_process, transcribe_uploaded_file,
+use features::transcription::{get_last_transcript, paste_last_transcript, transcribe_and_process};
+use features::transcriptions::{
+    clear_transcriptions, delete_transcription, list_transcriptions, save_transcription,
 };
-use features::updates::{check_for_updates, download_and_install_update};
 use utils::logger;
 
 use std::sync::Arc;
@@ -59,14 +54,6 @@ fn set_show_in_dock(_app: tauri::AppHandle, _show: bool) -> Result<(), String> {
     log::info!("set_show_in_dock called but app always runs in Accessory mode");
     Ok(())
 }
-
-/// Get a persistent device ID that survives app reinstalls
-/// Uses the machine's hardware UUID
-#[tauri::command]
-fn get_device_id() -> Result<String, String> {
-    machine_uid::get().map_err(|e| format!("Failed to get device ID: {}", e))
-}
-
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -97,7 +84,6 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::Builder::new().build())
@@ -108,16 +94,6 @@ pub fn run() {
                 let _ = win.show();
                 let _ = win.set_focus();
             }
-        }))
-        .plugin(tauri_plugin_posthog::init(PostHogConfig {
-            api_key: "phc_JbGCteuLKzFMg8YYUTMPNvup2iRyytw2DAqET76DUIM".to_string(),
-            api_host: "https://us.i.posthog.com".to_string(),
-            options: Some(PostHogOptions {
-                disable_session_recording: Some(true),
-                capture_pageview: Some(false),
-                capture_pageleave: Some(false),
-                ..Default::default()
-            }),
         }));
 
     // Only initialize logging plugin if devtools is not enabled
@@ -176,7 +152,7 @@ pub fn run() {
 
             // Try to save panic info to a crash file for debugging
             if let Ok(home_dir) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
-                let crash_file = std::path::Path::new(&home_dir).join(".dicta_crash.log");
+                let crash_file = std::path::Path::new(&home_dir).join(".wursper_crash.log");
                 let _ = std::fs::write(
                     &crash_file,
                     format!(
@@ -207,30 +183,13 @@ pub fn run() {
 
         let settings_cache = app.state::<Arc<SettingsCache>>().inner().clone();
 
-        // Migrate API keys from legacy encrypted storage to system keychain
-        // and sync hasApiKey flags with actual keychain state
-        let app_handle_migration = app.app_handle().clone();
-        tauri::async_runtime::spawn(async move {
-            // First, migrate any legacy keys
-            match features::security::migration::migrate_legacy_api_keys(&app_handle_migration)
-                .await
-            {
-                Ok(result) => {
-                    if result.migrated_count > 0 {
-                        log::info!(
-                            "API key migration completed: {} keys migrated to keychain",
-                            result.migrated_count
-                        );
-                    }
-                }
-                Err(e) => {
-                    log::error!("API key migration failed: {}", e);
-                }
-            }
+        // Initialize the SQLite transcription store (and import legacy JSON history)
+        features::transcriptions::setup_database(&app.handle())?;
 
-            // Then, sync hasApiKey flags with keychain state
-            // This ensures flags are accurate even if models.json is out of sync
-            if let Err(e) = features::security::sync_api_key_flags(&app_handle_migration).await {
+        // Sync hasApiKey flags with keychain state
+        let app_handle_keys = app.app_handle().clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = features::security::sync_api_key_flags(&app_handle_keys).await {
                 log::error!("Failed to sync API key flags: {}", e);
             }
         });
@@ -280,7 +239,6 @@ pub fn run() {
 
         features::window::setup_pill_window(&handle)?;
         features::window::setup_toast_window(&handle)?;
-        features::window::setup_command_result_window(&handle)?;
 
         // Start pill window position monitor (tracks screen changes)
         #[cfg(target_os = "macos")]
@@ -328,7 +286,6 @@ pub fn run() {
     let app = builder
         .invoke_handler(tauri::generate_handler![
             transcribe_and_process,
-            post_process_transcript,
             get_all_models,
             // Local model download commands
             download_local_model,
@@ -337,7 +294,6 @@ pub fn run() {
             start_local_model,
             stop_local_model,
             get_local_model_status,
-            debug_ai_settings,
             // Secure API key storage
             store_api_key,
             get_api_key,
@@ -357,9 +313,6 @@ pub fn run() {
             // Shortcuts management
             update_voice_input_shortcut,
             update_paste_shortcut,
-            update_command_mode_shortcut,
-            register_command_mode_shortcut,
-            unregister_command_mode_shortcut,
             register_ptt_shortcut,
             unregister_ptt_shortcut,
             update_ptt_shortcut,
@@ -370,9 +323,12 @@ pub fn run() {
             // Transcription utilities
             get_last_transcript,
             paste_last_transcript,
-            transcribe_uploaded_file,
+            // Transcription history (SQLite)
+            list_transcriptions,
+            save_transcription,
+            delete_transcription,
+            clear_transcriptions,
             // Recordings management
-            get_all_transcriptions,
             delete_recording,
             get_recording_audio_path,
             // System preferences
@@ -386,12 +342,7 @@ pub fn run() {
             features::settings::commands::update_shortcuts_settings,
             features::settings::commands::update_system_settings,
             features::settings::commands::update_privacy_settings,
-            features::settings::commands::update_ai_processing_settings,
             features::settings::commands::reset_settings,
-            // Data export/import
-            export_all_data,
-            import_all_data,
-            import_from_json,
             // Haptic feedback
             utils::haptic::trigger_haptic_feedback,
             // Tray menu
@@ -401,11 +352,6 @@ pub fn run() {
             check_speech_recognition_permission,
             #[cfg(target_os = "macos")]
             request_speech_recognition_permission,
-            // Updates
-            check_for_updates,
-            download_and_install_update,
-            // Analytics
-            get_device_id,
         ])
         .setup(setup_fn)
         .build(tauri::generate_context!())

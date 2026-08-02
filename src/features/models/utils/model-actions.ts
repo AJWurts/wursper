@@ -1,8 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { toast } from 'sonner'
 
-import { storeAnalytics } from '@/lib/analytics'
-
 import { initializeModels } from '..'
 
 import type { TranscriptionModel } from '../types'
@@ -39,18 +37,8 @@ export async function downloadModel(
     toast.success(`${model.name} ready to use!`, { id: toastId })
 
     // Track successful download
-    storeAnalytics.trackModelAction('downloaded', {
-      modelId: model.id,
-      modelType: 'stt',
-      modelProvider: model.provider,
-      modelSize: model.size ?? undefined,
-    })
   } catch (error) {
     toast.error(`Failed to download: ${error}`, { id: toastId })
-    storeAnalytics.trackError(String(error), {
-      context: 'model_download',
-      modelId: model.id,
-    })
   }
 }
 
@@ -69,17 +57,8 @@ export async function deleteModel(model: TranscriptionModel): Promise<void> {
     await initializeModels()
 
     // Track deletion
-    storeAnalytics.trackModelAction('deleted', {
-      modelId: model.id,
-      modelType: 'stt',
-      modelProvider: model.provider,
-    })
   } catch (error) {
     toast.error(`Failed to delete ${model.name}: ${error}`)
-    storeAnalytics.trackError(String(error), {
-      context: 'model_delete',
-      modelId: model.id,
-    })
     throw error
   }
 }

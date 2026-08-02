@@ -2,9 +2,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { create } from 'zustand'
 
-import { Transcription } from './schema'
-
-import type { TranscriptionsStore } from './types'
+import type { Transcription, TranscriptionsStore } from './types'
+import type { TranscriptionRecord } from './types/generated/TranscriptionRecord'
 
 function isToday(timestamp: number): boolean {
   const today = new Date()
@@ -16,6 +15,10 @@ function isToday(timestamp: number): boolean {
   )
 }
 
+function countWords(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length
+}
+
 export const useTranscriptionsStore = create<TranscriptionsStore>(
   (set, get) => ({
     transcriptions: [],
@@ -23,14 +26,16 @@ export const useTranscriptionsStore = create<TranscriptionsStore>(
 
     initialize: async () => {
       try {
-        const transcriptions = await invoke<Transcription[]>(
-          'get_all_transcriptions'
-        )
+        // Newest first, straight out of the local SQLite database
+        const records =
+          await invoke<TranscriptionRecord[]>('list_transcriptions')
 
-        set({
-          transcriptions: transcriptions ?? [],
-          initialized: true,
-        })
+        const transcriptions = (records ?? []).map(record => ({
+          ...record,
+          timestamp: Number(record.timestamp),
+        }))
+
+        set({ transcriptions, initialized: true })
       } catch (error) {
         console.error('Error initializing transcriptions store:', error)
         set({ transcriptions: [], initialized: true })
@@ -38,26 +43,29 @@ export const useTranscriptionsStore = create<TranscriptionsStore>(
     },
 
     addTranscription: async transcription => {
-      // Note: This is now handled by the Rust backend during transcription
-      // We just need to refresh from the recordings folder
-      await get().initialize()
+      const record: Transcription = {
+        ...transcription,
+        id: transcription.id ?? crypto.randomUUID(),
+        wordCount: transcription.wordCount ?? countWords(transcription.text),
+      }
 
-      // Return the most recent transcription (should be the one just added)
-      const transcriptions = get().transcriptions
-      return transcriptions[0] ?? transcription
+      try {
+        await invoke('save_transcription', { record })
+
+        set({ transcriptions: [record, ...get().transcriptions] })
+      } catch (error) {
+        console.error('Error saving transcription:', error)
+        throw error
+      }
+
+      return record
     },
 
     deleteTranscription: async id => {
       try {
-        // Parse timestamp from id (format: "timestamp-randomstring" or just "timestamp")
-        const timestamp = parseInt(id.split('-')[0])
+        await invoke('delete_transcription', { id })
 
-        // Delete from recordings folder via Rust command
-        await invoke('delete_recording', { timestamp })
-
-        // Update local state
-        const newTranscriptions = get().transcriptions.filter(t => t.id !== id)
-        set({ transcriptions: newTranscriptions })
+        set({ transcriptions: get().transcriptions.filter(t => t.id !== id) })
       } catch (error) {
         console.error('Error deleting transcription:', error)
         throw error
@@ -66,16 +74,12 @@ export const useTranscriptionsStore = create<TranscriptionsStore>(
 
     clearAll: async () => {
       try {
-        // Delete all recordings
-        const transcriptions = get().transcriptions
-        for (const transcription of transcriptions) {
-          const timestamp = parseInt(transcription.id.split('-')[0])
-          await invoke('delete_recording', { timestamp })
-        }
+        await invoke('clear_transcriptions')
 
         set({ transcriptions: [] })
       } catch (error) {
         console.error('Error clearing transcriptions:', error)
+        throw error
       }
     },
 
@@ -90,70 +94,21 @@ export const useTranscriptionsStore = create<TranscriptionsStore>(
         0
       )
       const totalDuration = transcriptions.reduce(
-        (sum, t) => sum + (t.duration || 0),
+        (sum, t) => sum + (t.duration ?? 0),
         0
       )
 
-      // Calculate words per minute (if we have duration data)
+      // Words per minute (only meaningful when durations were recorded)
       const wordsPerMinute =
         totalDuration > 0 ? Math.round((totalWords / totalDuration) * 60) : 0
 
-      // Estimate time saved: typing ~40 WPM vs speaking ~150 WPM
-      // Time saved = words / 40 - actual speaking time
+      // Estimate time saved: typing ~40 WPM vs speaking
       const typingTimeMinutes = totalWords / 40
       const speakingTimeMinutes = totalDuration / 60
       const timeSavedMinutes = Math.max(
         0,
         typingTimeMinutes - speakingTimeMinutes
       )
-
-      // Language statistics
-      const languageCounts: Record<string, number> = {}
-      let translatedCount = 0
-
-      for (const t of transcriptions) {
-        const lang = t.language || 'en'
-        languageCounts[lang] = (languageCounts[lang] || 0) + 1
-        if (t.translatedToEnglish) {
-          translatedCount++
-        }
-      }
-
-      // Sort languages by count and get top 5
-      const topLanguages = Object.entries(languageCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5)
-        .map(([code, count]) => ({ code, count }))
-
-      // Source type breakdown
-      const recordings = transcriptions.filter(
-        t => t.sourceType === 'recording'
-      )
-      const uploads = transcriptions.filter(t => t.sourceType === 'upload')
-      const commands = transcriptions.filter(t => t.sourceType === 'command')
-
-      // Today's breakdown
-      const todayRecordings = todayTranscriptions.filter(
-        t => t.sourceType === 'recording'
-      )
-      const todayCommands = todayTranscriptions.filter(
-        t => t.sourceType === 'command'
-      )
-
-      // Command stats - count words generated (from commandResult)
-      const commandWordsGenerated = commands.reduce((sum, t) => {
-        if (t.commandResult) {
-          return sum + t.commandResult.split(/\s+/).filter(Boolean).length
-        }
-        return sum
-      }, 0)
-
-      const todayCommandWordsGenerated = todayCommands.reduce((sum, t) => {
-        if (t.commandResult) {
-          return sum + t.commandResult.split(/\s+/).filter(Boolean).length
-        }
-        return sum
-      }, 0)
 
       return {
         totalTranscriptions: transcriptions.length,
@@ -167,30 +122,6 @@ export const useTranscriptionsStore = create<TranscriptionsStore>(
           transcriptions.length > 0
             ? Math.round(totalWords / transcriptions.length)
             : 0,
-        languageStats: {
-          topLanguages,
-          translatedCount,
-          uniqueLanguages: Object.keys(languageCounts).length,
-        },
-        // Source breakdown
-        sourceStats: {
-          recordings: recordings.length,
-          uploads: uploads.length,
-          commands: commands.length,
-          todayRecordings: todayRecordings.length,
-          todayCommands: todayCommands.length,
-        },
-        // Command mode stats
-        commandStats: {
-          totalCommands: commands.length,
-          todayCommands: todayCommands.length,
-          wordsGenerated: commandWordsGenerated,
-          todayWordsGenerated: todayCommandWordsGenerated,
-          avgWordsPerCommand:
-            commands.length > 0
-              ? Math.round(commandWordsGenerated / commands.length)
-              : 0,
-        },
       }
     },
   })
@@ -200,10 +131,9 @@ export const initializeTranscriptions = async () => {
   await useTranscriptionsStore.getState().initialize()
 }
 
-// Set up listener for changes from other windows
+// Reload when another window (or the backend) changes the history
 export const setupTranscriptionsSync = () => {
   listen('transcriptions-changed', async () => {
-    // Reload from Tauri store when another window makes changes
     await useTranscriptionsStore.getState().initialize()
   })
 }

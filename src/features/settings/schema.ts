@@ -10,7 +10,6 @@ export type {
   ShortcutsSettings,
   SystemSettings,
   PrivacySettings,
-  AiProcessingSettings,
 } from './types/generated'
 
 export const defaultSettings: Settings = {
@@ -44,10 +43,6 @@ export const defaultSettings: Settings = {
     playSoundOnRecording: true,
   },
   privacy: {
-    analytics: true,
-  },
-  aiProcessing: {
-    enabled: false,
-    postProcessingModelId: null,
+    analytics: false,
   },
 }

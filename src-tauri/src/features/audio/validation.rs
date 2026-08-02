@@ -182,7 +182,10 @@ pub async fn validate_pre_recording(app: &AppHandle) -> Result<(), ValidationErr
             .and_then(|ai| ai.get("postProcessingModelId"))
             .and_then(|v| v.as_str())
         {
-            log::info!("Validating post-processing model: {}", post_processing_model_id);
+            log::info!(
+                "Validating post-processing model: {}",
+                post_processing_model_id
+            );
 
             // Find the model
             if let Some(model) = models.iter().find(|m| {

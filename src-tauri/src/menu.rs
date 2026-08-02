@@ -175,19 +175,11 @@ pub fn setup_tray(app: &App, model_manager_cleanup: Arc<Mutex<LocalModelManager>
             true,
             None::<&str>,
         )?)
-        .separator()
-        .item(&MenuItem::with_id(
-            app,
-            "check-updates",
-            "Check for Updates...",
-            true,
-            None::<&str>,
-        )?)
         .build()?;
 
     let tray_menu = MenuBuilder::new(app)
         // Primary action
-        .item(&MenuItem::with_id(app, "home", "Open Dicta", true, None::<&str>)?)
+        .item(&MenuItem::with_id(app, "home", "Open Wursper", true, None::<&str>)?)
         .separator()
         // Quick actions
         .item(&quick_actions_submenu)
@@ -219,7 +211,7 @@ pub fn setup_tray(app: &App, model_manager_cleanup: Arc<Mutex<LocalModelManager>
         .item(&MenuItem::with_id(
             app,
             "quit",
-            "Quit Dicta",
+            "Quit Wursper",
             true,
             Some("CmdOrCtrl+Q"),
         )?)
@@ -398,20 +390,12 @@ async fn rebuild_tray_menu(
             true,
             None::<&str>,
         )?)
-        .separator()
-        .item(&MenuItem::with_id(
-            app,
-            "check-updates",
-            "Check for Updates...",
-            true,
-            None::<&str>,
-        )?)
         .build()?;
 
     // Rebuild the entire tray menu
     let tray_menu = MenuBuilder::new(app)
         // Primary action
-        .item(&MenuItem::with_id(app, "home", "Open Dicta", true, None::<&str>)?)
+        .item(&MenuItem::with_id(app, "home", "Open Wursper", true, None::<&str>)?)
         .separator()
         // Quick actions
         .item(&quick_actions_submenu)
@@ -443,7 +427,7 @@ async fn rebuild_tray_menu(
         .item(&MenuItem::with_id(
             app,
             "quit",
-            "Quit Dicta",
+            "Quit Wursper",
             true,
             Some("CmdOrCtrl+Q"),
         )?)
@@ -520,7 +504,8 @@ fn set_microphone_device(
     }
 
     // Reload settings cache to ensure it stays in sync
-    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>() {
+    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
+    {
         if let Err(e) = crate::features::settings::reload_cache(app, &cache) {
             log::warn!("Failed to reload settings cache: {}", e);
         }
@@ -659,7 +644,8 @@ fn set_transcription_language(
     }
 
     // Reload settings cache to ensure it stays in sync
-    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>() {
+    if let Some(cache) = app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
+    {
         if let Err(e) = crate::features::settings::reload_cache(app, &cache) {
             log::warn!("Failed to reload settings cache: {}", e);
         }
@@ -697,19 +683,9 @@ fn handle_tray_event(
                 let _ = window.set_focus();
             }
         }
-        "check-updates" => {
-            logger::info("Check for updates clicked");
-            let app_clone = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = crate::features::updates::check_for_updates(app_clone, false).await
-                {
-                    logger::error(&format!("Failed to check for updates: {}", e));
-                }
-            });
-        }
         "report-issue" => {
             logger::info("Report issue clicked");
-            let issue_url = "https://github.com/nitintf/dicta/issues/new";
+            let issue_url = "https://github.com/alexwurts/wursper/issues/new";
             if let Err(e) = open::that(issue_url) {
                 logger::error_with("Failed to open issues page", &[("error", &e.to_string())]);
             }
@@ -811,7 +787,7 @@ fn handle_tray_event(
         "general-feedback" => {
             logger::info("General feedback clicked");
             // Open mailto link with pre-filled support email
-            let mailto_url = "mailto:support@dicta.app?subject=Dicta%20Feedback";
+            let mailto_url = "mailto:support@wursper.app?subject=Wursper%20Feedback";
             if let Err(e) = open::that(mailto_url) {
                 logger::error_with("Failed to open email client", &[("error", &e.to_string())]);
             }
@@ -850,11 +826,11 @@ fn handle_tray_event(
 pub fn setup_menu_bar(app: &App) -> Result<()> {
     let handle = app.app_handle().clone();
 
-    let app_menu = SubmenuBuilder::new(app, "Dicta")
+    let app_menu = SubmenuBuilder::new(app, "Wursper")
         .item(&MenuItem::with_id(
             app,
             "about-dicta",
-            "About Dicta",
+            "About Wursper",
             true,
             None::<&str>,
         )?)
@@ -898,24 +874,12 @@ pub fn setup_menu_bar(app: &App) -> Result<()> {
         .item(&PredefinedMenuItem::close_window(app, None)?)
         .build()?;
 
-    // Create Updates menu
-    let updates_menu = SubmenuBuilder::new(app, "Updates")
-        .item(&MenuItem::with_id(
-            app,
-            "changelog",
-            "Changelog",
-            true,
-            None::<&str>,
-        )?)
-        .build()?;
-
     // Build the complete menu
     let menu = MenuBuilder::new(app)
         .item(&app_menu)
         .item(&edit_menu)
         .item(&view_menu)
         .item(&window_menu)
-        .item(&updates_menu)
         .build()?;
 
     // Set as app menu
@@ -947,10 +911,6 @@ fn handle_menu_bar_event(app: &AppHandle, event_id: &str) {
                 let _ = window.set_focus();
                 let _ = app.emit("open-settings", serde_json::json!({ "section": "about" }));
             }
-        }
-        "changelog" => {
-            // TODO: Open changelog
-            logger::info("Changelog clicked");
         }
         _ => {}
     }

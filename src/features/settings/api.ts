@@ -58,13 +58,6 @@ export async function updatePrivacySettings(params: {
   return invoke('update_privacy_settings', params)
 }
 
-export async function updateAiProcessingSettings(params: {
-  enabled?: boolean
-  postProcessingModelId?: string | null
-}): Promise<void> {
-  return invoke('update_ai_processing_settings', params)
-}
-
 export async function resetSettings(): Promise<void> {
   return invoke('reset_settings')
 }

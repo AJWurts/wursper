@@ -58,7 +58,7 @@ export function MicrophoneStep() {
 
       {/* Subtitle */}
       <p className="text-muted-foreground mb-8 max-w-sm">
-        Dicta needs microphone access to transcribe your voice in real-time.
+        Wursper needs microphone access to transcribe your voice in real-time.
       </p>
 
       {/* Status messages */}
@@ -80,7 +80,7 @@ export function MicrophoneStep() {
             </p>
             <p className="text-xs text-amber-400/70 mt-1">
               Open System Settings → Privacy & Security → Microphone and enable
-              Dicta
+              Wursper
             </p>
           </div>
         </div>

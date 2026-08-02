@@ -8,48 +8,6 @@ use tokio::sync::Mutex;
 use super::engines::ModelConfig;
 use super::LocalModelManager;
 
-/// Update AI processing settings when starting an LLM model
-fn update_ai_settings_for_llm(app: &AppHandle, model_id: &str) {
-    let Ok(store) = app.store("settings") else {
-        log::error!("Failed to get settings store");
-        return;
-    };
-
-    let Some(settings_value) = store.get("settings") else {
-        log::error!("No settings found in store");
-        return;
-    };
-
-    let mut settings = settings_value.clone();
-    let Some(obj) = settings.as_object_mut() else {
-        log::error!("Settings is not an object");
-        return;
-    };
-
-    obj.insert(
-        "aiProcessing".to_string(),
-        serde_json::json!({
-            "enabled": true,
-            "postProcessingModelId": model_id
-        }),
-    );
-
-    store.set("settings", settings);
-
-    log::debug!("HANG DIAGNOSTIC: About to save settings during startup model selection");
-    let start = std::time::Instant::now();
-    if let Err(e) = store.save() {
-        log::error!("Failed to save settings: {}", e);
-    }
-    let elapsed = start.elapsed();
-    if elapsed.as_millis() > 200 {
-        log::warn!(
-            "HANG DIAGNOSTIC: Startup settings store.save() took {:?} (slow)",
-            elapsed
-        );
-    }
-}
-
 /// Auto-start selected local models if they're downloaded
 pub async fn auto_start_selected_models(
     app: &AppHandle,
@@ -66,11 +24,6 @@ pub async fn auto_start_selected_models(
     let speech_to_text_id = settings
         .get("transcription")
         .and_then(|t| t.get("speechToTextModelId"))
-        .and_then(|v| v.as_str());
-
-    let post_processing_id = settings
-        .get("aiProcessing")
-        .and_then(|a| a.get("postProcessingModelId"))
         .and_then(|v| v.as_str());
 
     let models_store = app
@@ -91,20 +44,6 @@ pub async fn auto_start_selected_models(
                 Ok(name) => log::info!("Auto-started STT model: {}", name),
                 Err(ModelStartError::NotDownloaded(name)) => models_to_download.push(name),
                 Err(ModelStartError::Failed(e)) => log::error!("Failed to start STT model: {}", e),
-                Err(ModelStartError::NotLocal) => {}
-            }
-        }
-    }
-
-    // Auto-start post-processing model
-    if let Some(pp_id) = post_processing_id {
-        if let Some(result) = try_start_model(app, &model_manager, &models, pp_id).await {
-            match result {
-                Ok(name) => log::info!("Auto-started post-processing model: {}", name),
-                Err(ModelStartError::NotDownloaded(name)) => models_to_download.push(name),
-                Err(ModelStartError::Failed(e)) => {
-                    log::error!("Failed to start post-processing model: {}", e)
-                }
                 Err(ModelStartError::NotLocal) => {}
             }
         }
@@ -181,12 +120,7 @@ async fn try_start_model(
 
     let mut manager = model_manager.lock().await;
 
-    let result = if engine_type == "llama" {
-        update_ai_settings_for_llm(app, model_id);
-        manager.load_llm_model(engine_type, config)
-    } else {
-        manager.load_model(engine_type, config)
-    };
+    let result = manager.load_model(engine_type, config);
 
     if let Err(e) = result {
         return Some(Err(ModelStartError::Failed(e)));

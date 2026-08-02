@@ -46,8 +46,6 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       // Get settings to determine selected models
       const settings = useSettingsStore.getState().settings
       const selectedSpeechToTextId = settings.transcription.speechToTextModelId
-      const selectedPostProcessingId =
-        settings.aiProcessing.postProcessingModelId
 
       // Get all models from Rust with latest status
       const defaultModels = await getDefaultModels()
@@ -59,10 +57,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         modelsToUse = defaultModels.map(model => ({
           ...model,
           isSelected:
-            (model.purpose === 'speech-to-text' &&
-              model.id === selectedSpeechToTextId) ||
-            (model.purpose === 'post-processing' &&
-              model.id === selectedPostProcessingId),
+            model.purpose === 'speech-to-text' &&
+            model.id === selectedSpeechToTextId,
         }))
       } else {
         // Merge: use Rust data but preserve user settings (API keys)
@@ -84,10 +80,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
             // Determine selection based on settings
             const isSelected =
-              (rustModel.purpose === 'speech-to-text' &&
-                rustModel.id === selectedSpeechToTextId) ||
-              (rustModel.purpose === 'post-processing' &&
-                rustModel.id === selectedPostProcessingId)
+              rustModel.purpose === 'speech-to-text' &&
+              rustModel.id === selectedSpeechToTextId
 
             if (storedModel) {
               return {
@@ -318,8 +312,6 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       const settingsStore = useSettingsStore.getState()
       if (newModel.purpose === 'speech-to-text') {
         await settingsStore.setSpeechToTextModel(id)
-      } else if (newModel.purpose === 'post-processing') {
-        await settingsStore.setPostProcessingModel(id)
       }
 
       // Notify other windows to reload
@@ -356,59 +348,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       throw new Error('Invalid model for starting')
     }
 
-    // Extract model name from ID (e.g., "whisper-base" -> "base", "llm-qwen2-0.5b-instruct" -> "qwen2-0.5b-instruct")
-    const modelName = model.id.replace('whisper-', '').replace('llm-', '')
-
-    // If this is a post-processing model, also select it (which updates settings)
-    // This ensures postProcessingModelId is set when the model is started
-    if (model.purpose === 'post-processing') {
-      console.log('🚀 Starting post-processing model:', id)
-      console.log('   Model details:', {
-        id: model.id,
-        name: model.name,
-        purpose: model.purpose,
-        isSelected: model.isSelected,
-      })
-
-      const settingsStore = useSettingsStore.getState()
-      console.log(
-        '   Current AI settings:',
-        settingsStore.settings.aiProcessing
-      )
-
-      // Enable AI processing if not already enabled
-      if (!settingsStore.settings.aiProcessing.enabled) {
-        console.log('   ✅ Auto-enabling AI processing')
-        await settingsStore.setAiProcessingEnabled(true)
-      }
-
-      // Always set this as the post-processing model (even if already selected)
-      // to ensure settings are in sync
-      console.log('   ✅ Setting postProcessingModelId to:', id)
-      await settingsStore.setPostProcessingModel(id)
-
-      // Update local state to mark model as selected
-      const currentModels = get().models
-      const newModels = currentModels.map(m => ({
-        ...m,
-        isSelected:
-          m.id === id
-            ? true
-            : m.purpose === 'post-processing'
-              ? false
-              : m.isSelected,
-      }))
-      set({ models: newModels })
-
-      // Persist to store
-      const store = await getTauriStore()
-      await store.set('models', newModels)
-      await store.save()
-
-      // Verify the settings were saved
-      const verifySettings = useSettingsStore.getState().settings.aiProcessing
-      console.log('   ✅ Verified AI settings after save:', verifySettings)
-    }
+    // Extract model name from ID (e.g., "whisper-base" -> "base")
+    const modelName = model.id.replace('whisper-', '')
 
     try {
       await startLocalModelCommand(id, modelName, model.path, model.engine)
@@ -434,8 +375,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
   stopLocalModel: async id => {
     try {
-      // Pass the model ID so only this specific model type is stopped
-      // LLM models (llm-*) and STT models are managed separately
+      // Pass the model ID so only this specific model is stopped
       await stopLocalModelCommand(id)
 
       toast.success('Model stopped', {

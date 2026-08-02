@@ -328,62 +328,6 @@ pub const WHISPERKIT_MODELS: &[(&str, &str, &str)] = &[
     ("tiny", "45 MB", "Fastest, minimal footprint"),
 ];
 
-// Local LLM models for post-processing (GGUF format)
-// Format: (id, url, size, description, display_name)
-// Note: Only 3B+ models included - smaller models can't follow formatting instructions reliably
-pub const LOCAL_LLM_MODELS: &[(&str, &str, &str, &str, &str)] = &[
-    // ============================================
-    // RECOMMENDED: 7B+ models (GPT-4o Mini equivalent)
-    // These provide quality similar to cloud models
-    // ============================================
-    (
-        "qwen2.5-7b-instruct",
-        "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf",
-        "4.7 GB",
-        "Qwen2.5 7B - Best local model, GPT-4o Mini equivalent",
-        "Qwen2.5 7B Instruct",
-    ),
-    (
-        "llama-3.1-8b-instruct",
-        "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
-        "4.9 GB",
-        "Llama 3.1 8B - Meta's flagship, excellent formatting",
-        "Llama 3.1 8B Instruct",
-    ),
-    (
-        "mistral-7b-instruct",
-        "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-        "4.4 GB",
-        "Mistral 7B v0.2 - Fast and accurate instruction following",
-        "Mistral 7B Instruct v0.2",
-    ),
-    // ============================================
-    // COMPACT: 3B models (minimum for good formatting)
-    // Good for machines with limited RAM
-    // ============================================
-    (
-        "phi-3.5-mini-instruct",
-        "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
-        "2.3 GB",
-        "Phi-3.5 Mini (3.8B) - Microsoft's best compact model",
-        "Phi-3.5 Mini Instruct",
-    ),
-    (
-        "llama-3.2-3b-instruct",
-        "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
-        "2.0 GB",
-        "Llama 3.2 3B - Meta's compact model",
-        "Llama 3.2 3B Instruct",
-    ),
-    (
-        "qwen2.5-3b-instruct",
-        "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
-        "2.0 GB",
-        "Qwen2.5 3B - Alibaba's efficient model",
-        "Qwen2.5 3B Instruct",
-    ),
-];
-
 #[command]
 pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, String> {
     let mut models = Vec::new();
@@ -667,45 +611,6 @@ pub async fn get_all_models(app: AppHandle) -> Result<Vec<ModelDefinition>, Stri
         });
     }
     */ // End of WhisperKit and Apple Speech blocks
-
-    // Add local LLM models for post-processing
-    // Note: Uses "llama" directory to match the engine_type used during download
-    let llm_dir = app_data_dir.join("local_models").join("llama");
-    for (id, url, size, description, display_name) in LOCAL_LLM_MODELS {
-        let filename = url.split('/').last().unwrap_or("model.gguf").to_string();
-        let model_path = llm_dir.join(&filename);
-        let downloaded = model_path.exists();
-
-        // Mark qwen2.5-7b-instruct as recommended for post-processing
-        let is_recommended = *id == "qwen2.5-7b-instruct";
-
-        models.push(ModelDefinition {
-            id: format!("llm-{}", id),
-            name: display_name.to_string(),
-            provider: ModelProvider::LocalLLM,
-            model_type: ModelType::Local,
-            purpose: ModelPurpose::PostProcessing,
-            engine: Some("llama".to_string()),
-            size: Some(size.to_string()),
-            requires_api_key: false,
-            is_selected: false,
-            is_downloaded: Some(downloaded),
-            path: if downloaded {
-                Some(model_path.to_string_lossy().to_string())
-            } else {
-                None
-            },
-            description: Some(format!("{} - Runs locally, no API key needed", description)),
-            download_url: Some(url.to_string()),
-            filename: Some(filename),
-            is_recommended,
-            // Post-processing models don't have language support (not STT)
-            language_support: None,
-            cost_per_hour: Some("Free".to_string()),
-            languages_count: None,
-            supports_vocabulary: false, // N/A for post-processing
-        });
-    }
 
     Ok(models)
 }

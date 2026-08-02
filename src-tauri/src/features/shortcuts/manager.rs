@@ -6,7 +6,6 @@ use tauri::{command, App, AppHandle, Manager, Result, State};
 use tauri_plugin_global_shortcut::{
     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
 };
-use tauri_plugin_store::StoreExt;
 
 /// ShortcutManager uses parking_lot::Mutex instead of std::sync::Mutex because:
 /// - No lock poisoning on panic (more resilient)
@@ -17,7 +16,6 @@ pub struct ShortcutManager {
     pub push_to_talk_shortcut: Arc<Mutex<Option<Shortcut>>>,
     pub paste_shortcut: Arc<Mutex<Option<Shortcut>>>,
     pub escape_shortcut: Arc<Mutex<Option<Shortcut>>>,
-    pub command_mode_shortcut: Arc<Mutex<Option<Shortcut>>>,
     pub shortcuts_enabled: Arc<Mutex<bool>>,
 }
 
@@ -28,18 +26,16 @@ impl ShortcutManager {
             push_to_talk_shortcut: Arc::new(Mutex::new(None)),
             paste_shortcut: Arc::new(Mutex::new(None)),
             escape_shortcut: Arc::new(Mutex::new(None)),
-            command_mode_shortcut: Arc::new(Mutex::new(None)),
             shortcuts_enabled: Arc::new(Mutex::new(true)),
         }
     }
 }
 
-/// Registers the voice input, PTT, command mode, and paste shortcuts
+/// Registers the voice input, PTT, and paste shortcuts
 pub fn register_voice_input_shortcut(app: &App) -> Result<()> {
     let voice_input_shortcut_str = get_voice_input_shortcut_from_settings(app.handle());
     let paste_shortcut_str = get_paste_shortcut_from_settings(app.handle());
     let enable_ptt = get_enable_push_to_talk_from_settings(app.handle());
-    let enable_command_mode = get_enable_command_mode_from_settings(app.handle());
 
     let voice_shortcut = parse_shortcut(&voice_input_shortcut_str)
         .unwrap_or(Shortcut::new(Some(Modifiers::ALT), Code::Space));
@@ -49,22 +45,9 @@ pub fn register_voice_input_shortcut(app: &App) -> Result<()> {
         Code::KeyV,
     ));
 
-    // Conditionally register PTT and Command Mode shortcuts
+    // Conditionally register the PTT shortcut
     // Note: Escape shortcut is registered dynamically when recording starts
     let mut shortcuts_to_register = vec![voice_shortcut.clone(), paste_shortcut.clone()];
-
-    // Conditionally add command mode shortcut
-    let command_mode_shortcut_opt = if enable_command_mode {
-        let command_mode_shortcut_str = get_command_mode_shortcut_from_settings(app.handle());
-        let cmd_shortcut = parse_shortcut(&command_mode_shortcut_str).unwrap_or(Shortcut::new(
-            Some(Modifiers::SUPER | Modifiers::SHIFT),
-            Code::Space,
-        ));
-        shortcuts_to_register.push(cmd_shortcut.clone());
-        Some(cmd_shortcut)
-    } else {
-        None
-    };
 
     let ptt_shortcut_opt = if enable_ptt {
         let ptt_shortcut_str = get_ptt_shortcut_from_settings(app.handle());
@@ -77,7 +60,6 @@ pub fn register_voice_input_shortcut(app: &App) -> Result<()> {
     };
 
     let ptt_shortcut_for_handler = ptt_shortcut_opt.clone();
-    let command_mode_for_handler = command_mode_shortcut_opt.clone();
 
     app.handle().plugin(
         tauri_plugin_global_shortcut::Builder::new()
@@ -86,10 +68,6 @@ pub fn register_voice_input_shortcut(app: &App) -> Result<()> {
             .with_handler(move |app, shortcut, event| {
                 if shortcut.id() == voice_shortcut.id() {
                     handle_voice_input_shortcut(app, shortcut, event);
-                } else if let Some(ref cmd) = command_mode_for_handler {
-                    if shortcut.id() == cmd.id() {
-                        handle_command_mode_shortcut(app, shortcut, event);
-                    }
                 }
                 if let Some(ref ptt) = ptt_shortcut_for_handler {
                     if shortcut.id() == ptt.id() {
@@ -109,7 +87,6 @@ pub fn register_voice_input_shortcut(app: &App) -> Result<()> {
     *shortcut_state.voice_input_shortcut.lock() = Some(voice_shortcut);
     *shortcut_state.push_to_talk_shortcut.lock() = ptt_shortcut_opt;
     *shortcut_state.paste_shortcut.lock() = Some(paste_shortcut);
-    *shortcut_state.command_mode_shortcut.lock() = command_mode_shortcut_opt;
     // Escape shortcut is not registered here - it's registered dynamically when recording starts
     *shortcut_state.escape_shortcut.lock() = None;
 
@@ -131,18 +108,6 @@ fn get_ptt_shortcut_from_settings(app: &AppHandle) -> String {
 fn get_enable_push_to_talk_from_settings(app: &AppHandle) -> bool {
     app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
         .map(|cache| cache.get_enable_push_to_talk())
-        .unwrap_or(false)
-}
-
-fn get_command_mode_shortcut_from_settings(app: &AppHandle) -> String {
-    app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
-        .map(|cache| cache.get_command_mode_shortcut())
-        .unwrap_or_else(|| "CmdOrCtrl+Shift+Space".to_string())
-}
-
-fn get_enable_command_mode_from_settings(app: &AppHandle) -> bool {
-    app.try_state::<std::sync::Arc<crate::features::settings::SettingsCache>>()
-        .map(|cache| cache.get_enable_command_mode())
         .unwrap_or(false)
 }
 
@@ -198,26 +163,6 @@ fn handle_escape_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: Sh
         tauri::async_runtime::spawn(async move {
             if let Err(e) = handler_clone.handle_escape_shortcut(&app_clone).await {
                 log::error!("Failed to handle escape shortcut: {}", e);
-            }
-        });
-    }
-}
-
-fn handle_command_mode_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
-    if event.id == shortcut.id() {
-        let handler =
-            app.state::<std::sync::Arc<crate::features::shortcuts::RecordingShortcutHandler>>();
-        let handler_clone = handler.inner().clone();
-        let app_clone = app.clone();
-        let event_clone = event.clone();
-
-        // Command mode shortcut uses toggle mode with Command recording mode
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) = handler_clone
-                .handle_command_mode(&app_clone, &event_clone)
-                .await
-            {
-                log::error!("Failed to handle command mode shortcut: {}", e);
             }
         });
     }
@@ -332,113 +277,6 @@ fn handle_paste_shortcut(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEv
     }
 }
 
-/// Command to update the command mode shortcut
-#[command]
-pub async fn update_command_mode_shortcut(
-    app: AppHandle,
-    shortcut_str: String,
-    shortcut_state: State<'_, ShortcutManager>,
-) -> std::result::Result<(), String> {
-    logger::info(&format!(
-        "Updating command mode shortcut to: {}",
-        shortcut_str
-    ));
-
-    // Check if shortcuts are enabled
-    let shortcuts_enabled = *shortcut_state.shortcuts_enabled.lock();
-
-    if !shortcuts_enabled {
-        logger::info("Shortcuts are disabled, skipping registration");
-        return Ok(());
-    }
-
-    // Parse the new shortcut
-    let new_shortcut = parse_shortcut(&shortcut_str)
-        .ok_or_else(|| format!("Failed to parse shortcut: {}", shortcut_str))?;
-
-    // Unregister old shortcut if it exists
-    {
-        let mut old_shortcut = shortcut_state.command_mode_shortcut.lock();
-        if let Some(old) = old_shortcut.take() {
-            logger::info("Unregistering old command mode shortcut");
-            let _ = app.global_shortcut().unregister(old);
-        }
-    }
-
-    // Register new shortcut
-    let shortcut_clone = new_shortcut.clone();
-    app.global_shortcut()
-        .on_shortcut(new_shortcut.clone(), move |app, shortcut, event| {
-            handle_command_mode_shortcut(app, shortcut, event);
-        })
-        .map_err(|e| format!("Failed to register command mode shortcut: {}", e))?;
-
-    // Store the new shortcut
-    *shortcut_state.command_mode_shortcut.lock() = Some(shortcut_clone);
-
-    logger::info("Command mode shortcut updated successfully");
-    Ok(())
-}
-
-/// Command to register command mode shortcut (called when user enables Command Mode)
-#[command]
-pub async fn register_command_mode_shortcut(
-    app: AppHandle,
-    shortcut_str: String,
-    shortcut_state: State<'_, ShortcutManager>,
-) -> std::result::Result<(), String> {
-    logger::info(&format!(
-        "Registering command mode shortcut: {}",
-        shortcut_str
-    ));
-
-    // Check if shortcuts are enabled
-    let shortcuts_enabled = *shortcut_state.shortcuts_enabled.lock();
-
-    if !shortcuts_enabled {
-        logger::info("Shortcuts are disabled, skipping command mode registration");
-        return Ok(());
-    }
-
-    // Parse the shortcut
-    let new_shortcut = parse_shortcut(&shortcut_str)
-        .ok_or_else(|| format!("Failed to parse command mode shortcut: {}", shortcut_str))?;
-
-    // Register new shortcut
-    let shortcut_clone = new_shortcut.clone();
-    app.global_shortcut()
-        .on_shortcut(new_shortcut.clone(), move |app, shortcut, event| {
-            handle_command_mode_shortcut(app, shortcut, event);
-        })
-        .map_err(|e| format!("Failed to register command mode shortcut: {}", e))?;
-
-    // Store the new shortcut
-    *shortcut_state.command_mode_shortcut.lock() = Some(shortcut_clone);
-
-    logger::info("Command mode shortcut registered successfully");
-    Ok(())
-}
-
-/// Command to unregister command mode shortcut (called when user disables Command Mode)
-#[command]
-pub async fn unregister_command_mode_shortcut(
-    app: AppHandle,
-    shortcut_state: State<'_, ShortcutManager>,
-) -> std::result::Result<(), String> {
-    logger::info("Unregistering command mode shortcut");
-
-    // Unregister command mode shortcut
-    {
-        let mut cmd_shortcut = shortcut_state.command_mode_shortcut.lock();
-        if let Some(shortcut) = cmd_shortcut.take() {
-            let _ = app.global_shortcut().unregister(shortcut);
-        }
-    }
-
-    logger::info("Command mode shortcut unregistered");
-    Ok(())
-}
-
 /// Command to disable all global shortcuts
 #[command]
 pub async fn disable_global_shortcuts(
@@ -459,14 +297,6 @@ pub async fn disable_global_shortcuts(
     {
         let mut paste_shortcut = shortcut_state.paste_shortcut.lock();
         if let Some(shortcut) = paste_shortcut.take() {
-            let _ = app.global_shortcut().unregister(shortcut);
-        }
-    }
-
-    // Unregister command mode shortcut
-    {
-        let mut command_mode_shortcut = shortcut_state.command_mode_shortcut.lock();
-        if let Some(shortcut) = command_mode_shortcut.take() {
             let _ = app.global_shortcut().unregister(shortcut);
         }
     }
@@ -521,22 +351,6 @@ pub async fn enable_global_shortcuts(
             .map_err(|e| format!("Failed to register paste shortcut: {}", e))?;
 
         *shortcut_state.paste_shortcut.lock() = Some(shortcut_clone);
-    }
-
-    // Re-register command mode shortcut from settings (only if command mode is enabled)
-    let enable_command_mode = get_enable_command_mode_from_settings(&app);
-    if enable_command_mode {
-        let command_mode_shortcut_str = get_command_mode_shortcut_from_settings(&app);
-        if let Some(parsed) = parse_shortcut(&command_mode_shortcut_str) {
-            let shortcut_clone = parsed.clone();
-            app.global_shortcut()
-                .on_shortcut(parsed.clone(), move |app, shortcut, event| {
-                    handle_command_mode_shortcut(app, shortcut, event);
-                })
-                .map_err(|e| format!("Failed to register command mode shortcut: {}", e))?;
-
-            *shortcut_state.command_mode_shortcut.lock() = Some(shortcut_clone);
-        }
     }
 
     // Re-register Escape shortcut

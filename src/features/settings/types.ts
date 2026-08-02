@@ -12,16 +12,12 @@ export interface SettingsStore {
   setAutoPaste: (enabled: boolean) => Promise<void>
   setAutoCopyToClipboard: (enabled: boolean) => Promise<void>
   setPasteShortcut: (shortcut: string) => Promise<void>
-  setCommandModeShortcut: (shortcut: string) => Promise<void>
-  setEnableCommandMode: (enabled: boolean) => Promise<void>
   setGlobalShortcutsEnabled: (enabled: boolean) => Promise<void>
   setShowInDock: (enabled: boolean) => Promise<void>
   setSaveAudioRecordings: (enabled: boolean) => Promise<void>
   setAnalytics: (enabled: boolean) => Promise<void>
   resetSettings: () => Promise<void>
-  setAiProcessingEnabled: (enabled: boolean) => Promise<void>
   setSpeechToTextModel: (modelId: string | null) => Promise<void>
-  setPostProcessingModel: (modelId: string | null) => Promise<void>
   setEnablePushToTalk: (enabled: boolean) => Promise<void>
   setPushToTalkShortcut: (shortcut: string) => Promise<void>
   setTranslateToEnglish: (enabled: boolean) => Promise<void>

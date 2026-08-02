@@ -12,7 +12,7 @@ export function SystemPanel() {
       <SettingsSection>
         <SettingItem
           title="Launch at startup"
-          description="Automatically launch Dicta when you log in"
+          description="Automatically launch Wursper when you log in"
           action={<LaunchAtStartup />}
         />
 

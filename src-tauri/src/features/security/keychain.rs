@@ -5,7 +5,7 @@
 use keyring::Entry;
 
 /// Service name for keychain entries - matches the app's bundle identifier
-const SERVICE_NAME: &str = "com.nitintf.dicta";
+const SERVICE_NAME: &str = "com.alexwurts.wursper";
 
 /// Get the keyring account name for a model's API key
 fn get_account_name(model_id: &str) -> String {

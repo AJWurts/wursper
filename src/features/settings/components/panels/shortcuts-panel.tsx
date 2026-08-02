@@ -11,8 +11,6 @@ export function ShortcutsPanel() {
     setVoiceInputShortcut,
     setPushToTalkShortcut,
     setPasteShortcut,
-    setCommandModeShortcut,
-    setEnableCommandMode,
     setGlobalShortcutsEnabled,
     setEnablePushToTalk,
   } = useSettingsStore()
@@ -33,7 +31,7 @@ export function ShortcutsPanel() {
             />
           }
           info={
-            <SettingsInfoTooltip content="Global shortcuts work from any app, even when Dicta is in the background. Disable if they conflict with shortcuts in other applications." />
+            <SettingsInfoTooltip content="Global shortcuts work from any app, even when Wursper is in the background. Disable if they conflict with shortcuts in other applications." />
           }
         />
 
@@ -53,44 +51,6 @@ export function ShortcutsPanel() {
             />
           }
         />
-
-        <SettingItem
-          title="Enable Command Mode"
-          description={
-            settings.shortcuts.globalShortcutsEnabled
-              ? 'Speak instructions to generate content with AI'
-              : 'Global shortcuts are disabled'
-          }
-          action={
-            <Switch
-              checked={settings.shortcuts.enableCommandMode}
-              onCheckedChange={setEnableCommandMode}
-              disabled={!settings.shortcuts.globalShortcutsEnabled}
-            />
-          }
-          info={
-            <SettingsInfoTooltip content="Command Mode lets you speak an instruction (e.g., 'Write an email to John') and AI will generate the content for you. Different from dictation which transcribes what you say." />
-          }
-        />
-
-        {settings.shortcuts.enableCommandMode && (
-          <SettingItem
-            title="Command Mode shortcut"
-            description={
-              settings.shortcuts.globalShortcutsEnabled
-                ? 'Press to start Command Mode recording'
-                : 'Global shortcuts are disabled'
-            }
-            action={
-              <ShortcutRecorder
-                value={settings.shortcuts.commandModeShortcut}
-                onChange={setCommandModeShortcut}
-                placeholder="Not set"
-                disabled={!settings.shortcuts.globalShortcutsEnabled}
-              />
-            }
-          />
-        )}
 
         <SettingItem
           title="Enable Push-to-Talk"

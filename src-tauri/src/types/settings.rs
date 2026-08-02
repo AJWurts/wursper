@@ -54,14 +54,6 @@ pub struct TranscriptionSettings {
 pub struct ShortcutsSettings {
     pub paste_last_transcript: String,
     pub global_shortcuts_enabled: bool,
-    #[serde(default)]
-    pub enable_command_mode: bool,
-    #[serde(default = "default_command_mode_shortcut")]
-    pub command_mode_shortcut: String,
-}
-
-fn default_command_mode_shortcut() -> String {
-    "CmdOrCtrl+Shift+Space".to_string()
 }
 
 /// System settings
@@ -82,15 +74,6 @@ pub struct PrivacySettings {
     pub analytics: bool,
 }
 
-/// AI Processing settings
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../src/features/settings/types/generated/")]
-#[serde(rename_all = "camelCase")]
-pub struct AiProcessingSettings {
-    pub enabled: bool,
-    pub post_processing_model_id: Option<String>,
-}
-
 /// Root settings object
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/features/settings/types/generated/")]
@@ -102,7 +85,6 @@ pub struct Settings {
     pub shortcuts: ShortcutsSettings,
     pub system: SystemSettings,
     pub privacy: PrivacySettings,
-    pub ai_processing: AiProcessingSettings,
 }
 
 impl Default for Settings {
@@ -127,8 +109,6 @@ impl Default for Settings {
             shortcuts: ShortcutsSettings {
                 paste_last_transcript: "CmdOrCtrl+Shift+V".to_string(),
                 global_shortcuts_enabled: true,
-                enable_command_mode: false,
-                command_mode_shortcut: default_command_mode_shortcut(),
             },
             system: SystemSettings {
                 show_in_dock: true,
@@ -136,10 +116,6 @@ impl Default for Settings {
                 play_sound_on_recording: true,
             },
             privacy: PrivacySettings { analytics: true },
-            ai_processing: AiProcessingSettings {
-                enabled: false,
-                post_processing_model_id: None,
-            },
         }
     }
 }

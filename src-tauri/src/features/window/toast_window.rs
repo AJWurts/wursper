@@ -93,8 +93,8 @@ fn calculate_toast_position(mtm: objc2::MainThreadMarker) -> (f64, f64) {
     let main_screen = NSScreen::mainScreen(mtm).expect("Failed to get main screen");
     let main_frame = main_screen.frame();
 
-    let target_screen = find_screen_for_point(&screens, mouse_location.x, mouse_location.y)
-        .unwrap_or(main_screen);
+    let target_screen =
+        find_screen_for_point(&screens, mouse_location.x, mouse_location.y).unwrap_or(main_screen);
     let visible = target_screen.visibleFrame();
 
     let x = visible.origin.x + (visible.size.width - TOAST_WIDTH) / 2.0;

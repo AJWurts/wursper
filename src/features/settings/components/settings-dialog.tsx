@@ -2,7 +2,6 @@ import React, { useState, useCallback, useEffect } from 'react'
 
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useTauriEvent } from '@/hooks/use-tauri-event'
-import { useAnalytics } from '@/lib/analytics'
 
 import { AboutPanel } from './panels/about-panel'
 import { GeneralPanel } from './panels/general-panel'
@@ -45,26 +44,14 @@ export function SettingsDialog({
 }: SettingsDialogProps) {
   const [activeSection, setActiveSection] =
     useState<SettingsPanelId>(initialSection)
-  const { capture, events } = useAnalytics()
 
   useEffect(() => {
     setActiveSection(initialSection)
   }, [initialSection])
 
-  // Track when settings dialog is opened
-  useEffect(() => {
-    if (open) {
-      capture(events.SETTINGS_OPENED)
-    }
-  }, [open, capture, events])
-
-  const handleSectionChange = useCallback(
-    (section: SettingsPanelId) => {
-      setActiveSection(section)
-      capture(events.SETTINGS_SECTION_VIEWED, { section })
-    },
-    [capture, events]
-  )
+  const handleSectionChange = useCallback((section: SettingsPanelId) => {
+    setActiveSection(section)
+  }, [])
 
   const handleOpenSettings = useCallback(
     (event: { payload: OpenSettingsPayload }) => {
