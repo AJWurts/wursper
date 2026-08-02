@@ -478,7 +478,10 @@ pub fn start_pill_window_monitor(app: AppHandle) {
         loop {
             // Check for shutdown signal
             if should_shutdown_monitor() {
-                log::info!("Pill window monitor shutting down (after {} iterations)", loop_count);
+                log::info!(
+                    "Pill window monitor shutting down (after {} iterations)",
+                    loop_count
+                );
                 break;
             }
 

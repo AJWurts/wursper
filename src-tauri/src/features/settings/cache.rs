@@ -85,7 +85,10 @@ impl SettingsCache {
 
     #[inline]
     pub fn get_ptt_shortcut(&self) -> String {
-        self.get_snapshot().voice_input.push_to_talk_shortcut.clone()
+        self.get_snapshot()
+            .voice_input
+            .push_to_talk_shortcut
+            .clone()
     }
 
     #[inline]
@@ -99,18 +102,8 @@ impl SettingsCache {
     }
 
     #[inline]
-    pub fn get_command_mode_shortcut(&self) -> String {
-        self.get_snapshot().shortcuts.command_mode_shortcut.clone()
-    }
-
-    #[inline]
     pub fn get_global_shortcuts_enabled(&self) -> bool {
         self.get_snapshot().shortcuts.global_shortcuts_enabled
-    }
-
-    #[inline]
-    pub fn get_enable_command_mode(&self) -> bool {
-        self.get_snapshot().shortcuts.enable_command_mode
     }
 
     #[inline]
@@ -148,19 +141,6 @@ impl SettingsCache {
         self.get_snapshot()
             .transcription
             .speech_to_text_model_id
-            .clone()
-    }
-
-    #[inline]
-    pub fn get_ai_processing_enabled(&self) -> bool {
-        self.get_snapshot().ai_processing.enabled
-    }
-
-    #[inline]
-    pub fn get_post_processing_model_id(&self) -> Option<String> {
-        self.get_snapshot()
-            .ai_processing
-            .post_processing_model_id
             .clone()
     }
 
@@ -272,8 +252,8 @@ mod tests {
     #[test]
     fn test_arc_swap_consistency() {
         // Test that readers see consistent snapshots even during updates
-        use std::sync::Arc;
         use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
 
         let cache = Arc::new(SettingsCache::new());
 

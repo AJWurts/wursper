@@ -10,7 +10,6 @@ export type {
   ShortcutsSettings,
   SystemSettings,
   PrivacySettings,
-  AiProcessingSettings,
 } from './types/generated'
 
 export const defaultSettings: Settings = {
@@ -35,8 +34,6 @@ export const defaultSettings: Settings = {
   shortcuts: {
     pasteLastTranscript: 'CmdOrCtrl+Shift+V',
     globalShortcutsEnabled: true,
-    enableCommandMode: false,
-    commandModeShortcut: 'CmdOrCtrl+Shift+Space',
   },
   system: {
     showInDock: false,
@@ -44,10 +41,6 @@ export const defaultSettings: Settings = {
     playSoundOnRecording: true,
   },
   privacy: {
-    analytics: true,
-  },
-  aiProcessing: {
-    enabled: false,
-    postProcessingModelId: null,
+    analytics: false,
   },
 }

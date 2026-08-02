@@ -10,10 +10,6 @@ pub mod candle_whisper;
 #[cfg(target_os = "macos")]
 pub mod whisperkit;
 
-// LLM engines for post-processing
-pub mod llama;
-pub mod llm_trait;
-
 /// Status of a local model engine
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]

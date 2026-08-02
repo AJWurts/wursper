@@ -59,14 +59,6 @@ export function filterTranscriptions(
       return false
     }
 
-    // Source filter
-    if (filters.source !== 'all') {
-      const sourceType = transcription.sourceType || 'recording'
-      if (sourceType !== filters.source) {
-        return false
-      }
-    }
-
     // Time filter
     if (filters.time !== 'all') {
       switch (filters.time) {
@@ -80,13 +72,6 @@ export function filterTranscriptions(
           if (!isThisMonth(transcription.timestamp)) return false
           break
       }
-    }
-
-    // Audio filter
-    if (filters.audio !== 'all') {
-      const hasAudio = transcription.hasAudio ?? false
-      if (filters.audio === 'with-audio' && !hasAudio) return false
-      if (filters.audio === 'without-audio' && hasAudio) return false
     }
 
     return true

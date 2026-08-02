@@ -3,4 +3,4 @@
 /**
  * Shortcuts settings
  */
-export type ShortcutsSettings = { pasteLastTranscript: string, globalShortcutsEnabled: boolean, enableCommandMode: boolean, commandModeShortcut: string, };
+export type ShortcutsSettings = { pasteLastTranscript: string, globalShortcutsEnabled: boolean, };

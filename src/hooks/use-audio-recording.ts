@@ -2,8 +2,6 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { AnalyticsEvents, storeAnalytics } from '@/lib/analytics'
-
 import type { RecordingResponse } from '@/features/voice-input/types/generated/RecordingResponse'
 import type { RecordingState } from '@/features/voice-input/types/generated/RecordingState'
 
@@ -74,19 +72,13 @@ export function useAudioRecording(): UseAudioRecordingReturn {
         setFilePath(response.filePath || null)
         setError(null)
         recordingStartTime.current = Date.now()
-        storeAnalytics.capture(AnalyticsEvents.RECORDING_STARTED)
       } else {
         setError(response.error || 'Failed to start recording')
-        storeAnalytics.trackError(
-          response.error || 'Failed to start recording',
-          { context: 'recording_start' }
-        )
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       setError(errorMsg)
       console.error('Failed to start recording:', err)
-      storeAnalytics.trackError(errorMsg, { context: 'recording_start' })
     }
   }, [])
 
@@ -96,25 +88,14 @@ export function useAudioRecording(): UseAudioRecordingReturn {
       if (response.success) {
         setState(response.state)
         setError(null)
-        const duration = recordingStartTime.current
-          ? (Date.now() - recordingStartTime.current) / 1000
-          : undefined
-        storeAnalytics.capture(AnalyticsEvents.RECORDING_COMPLETED, {
-          duration_seconds: duration,
-        })
         recordingStartTime.current = null
       } else {
         setError(response.error || 'Failed to stop recording')
-        storeAnalytics.trackError(
-          response.error || 'Failed to stop recording',
-          { context: 'recording_stop' }
-        )
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       setError(errorMsg)
       console.error('Failed to stop recording:', err)
-      storeAnalytics.trackError(errorMsg, { context: 'recording_stop' })
     }
   }, [])
 
@@ -125,20 +106,14 @@ export function useAudioRecording(): UseAudioRecordingReturn {
         setState(response.state)
         setFilePath(null)
         setError(null)
-        storeAnalytics.capture(AnalyticsEvents.RECORDING_CANCELLED)
         recordingStartTime.current = null
       } else {
         setError(response.error || 'Failed to cancel recording')
-        storeAnalytics.trackError(
-          response.error || 'Failed to cancel recording',
-          { context: 'recording_cancel' }
-        )
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       setError(errorMsg)
       console.error('Failed to cancel recording:', err)
-      storeAnalytics.trackError(errorMsg, { context: 'recording_cancel' })
     }
   }, [])
 

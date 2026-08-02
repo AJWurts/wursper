@@ -23,8 +23,8 @@ pub fn save(app: &AppHandle, settings: &Settings) -> Result<(), String> {
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to get settings store: {}", e))?;
 
-    let value =
-        serde_json::to_value(settings).map_err(|e| format!("Failed to serialize settings: {}", e))?;
+    let value = serde_json::to_value(settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
 
     store.set(SETTINGS_KEY, value);
 

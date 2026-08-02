@@ -15,7 +15,6 @@ export function TranscriptionPanel() {
     settings,
     setAutoPaste,
     setAutoCopyToClipboard,
-    setAiProcessingEnabled,
     setTranslateToEnglish,
     setAutoDetectLanguage,
   } = useSettingsStore()
@@ -23,7 +22,6 @@ export function TranscriptionPanel() {
 
   const [autoPasteLoading, setAutoPasteLoading] = useState(false)
   const [autoCopyLoading, setAutoCopyLoading] = useState(false)
-  const [aiProcessingLoading, setAiProcessingLoading] = useState(false)
 
   // Language settings logic
   const selectedLanguage = getLanguageByCode(settings.transcription.language)
@@ -62,17 +60,6 @@ export function TranscriptionPanel() {
       console.error('Failed to toggle auto-copy:', error)
     } finally {
       setAutoCopyLoading(false)
-    }
-  }
-
-  const handleAiProcessingToggle = async (checked: boolean) => {
-    setAiProcessingLoading(true)
-    try {
-      await setAiProcessingEnabled(checked)
-    } catch (error) {
-      console.error('Failed to toggle AI processing:', error)
-    } finally {
-      setAiProcessingLoading(false)
     }
   }
 
@@ -199,22 +186,6 @@ export function TranscriptionPanel() {
         />
       </SettingsSection>
 
-      <SettingsSection title="AI Post-Processing">
-        <SettingItem
-          title="Enable AI post-processing"
-          description="Enhance transcriptions with AI-powered formatting and refinement"
-          action={
-            <Switch
-              checked={settings.aiProcessing.enabled}
-              onCheckedChange={handleAiProcessingToggle}
-              disabled={aiProcessingLoading}
-            />
-          }
-          info={
-            <SettingsInfoTooltip content="Uses AI to clean up your transcription - fixing grammar, adding punctuation, and applying styles based on context. Requires a post-processing model to be selected and started in the Models page." />
-          }
-        />
-      </SettingsSection>
     </SettingsPanel>
   )
 }

@@ -141,7 +141,7 @@ export function AccessibilityStep() {
               Enabled in System Settings?
             </p>
             <p className="text-xs text-blue-400/70 mt-1">
-              If you've enabled Dicta in Accessibility settings, click "I've
+              If you've enabled Wursper in Accessibility settings, click "I've
               Enabled It" to continue.
             </p>
           </div>

@@ -51,7 +51,7 @@ export function WelcomeStep() {
 
       {/* Title */}
       <h1 className="text-3xl font-semibold tracking-tight mb-3">
-        Welcome to <span className="text-primary">Dicta</span>
+        Welcome to <span className="text-primary">Wursper</span>
       </h1>
 
       {/* Subtitle */}

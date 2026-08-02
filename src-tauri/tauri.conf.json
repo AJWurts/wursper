@@ -38,14 +38,6 @@
     }
   },
   "plugins": {
-    "updater": {
-      "active": true,
-      "dialog": true,
-      "endpoints": [
-        "https://github.com/nitintf/dicta/releases/latest/download/latest.json"
-      ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIwNEM3QUU5NDQxRDBGQUMKUldTc0R4MUU2WHBNc1BGaDBUZ0p3QVhGL3Nhdm13NkpRRDEzTTVCdFdMTkt6SWI3bTdWcW0xMEgK"
-    },
     "webview": {
       "windows": [
         "main"

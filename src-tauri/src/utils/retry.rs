@@ -119,10 +119,7 @@ where
 
                 // Check if error is retryable
                 if !is_retryable_error(&e) {
-                    log::debug!(
-                        "Error is not retryable, failing immediately: {}",
-                        e
-                    );
+                    log::debug!("Error is not retryable, failing immediately: {}", e);
                     return Err(e);
                 }
 
@@ -138,7 +135,8 @@ where
 
                 // Calculate next delay with exponential backoff
                 delay = Duration::from_secs_f64(
-                    (delay.as_secs_f64() * config.backoff_multiplier).min(config.max_delay.as_secs_f64()),
+                    (delay.as_secs_f64() * config.backoff_multiplier)
+                        .min(config.max_delay.as_secs_f64()),
                 );
             }
         }
@@ -175,7 +173,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_with_retry_success_first_try() {
-        let result = with_retry(RetryConfig::default(), || async { Ok::<_, String>("success".to_string()) }).await;
+        let result = with_retry(RetryConfig::default(), || async {
+            Ok::<_, String>("success".to_string())
+        })
+        .await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "success");
