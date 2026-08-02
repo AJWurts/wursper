@@ -117,8 +117,6 @@ pub fn update_transcription_settings(
 pub fn update_shortcuts_settings(
     paste_last_transcript: Option<String>,
     global_shortcuts_enabled: Option<bool>,
-    enable_command_mode: Option<bool>,
-    command_mode_shortcut: Option<String>,
     app: AppHandle,
     cache: State<'_, Arc<SettingsCache>>,
 ) -> Result<(), String> {
@@ -129,12 +127,6 @@ pub fn update_shortcuts_settings(
     }
     if let Some(e) = global_shortcuts_enabled {
         settings.shortcuts.global_shortcuts_enabled = e;
-    }
-    if let Some(e) = enable_command_mode {
-        settings.shortcuts.enable_command_mode = e;
-    }
-    if let Some(s) = command_mode_shortcut {
-        settings.shortcuts.command_mode_shortcut = s;
     }
 
     store::save(&app, &settings)?;
@@ -179,28 +171,6 @@ pub fn update_privacy_settings(
 
     if let Some(a) = analytics {
         settings.privacy.analytics = a;
-    }
-
-    store::save(&app, &settings)?;
-    cache.update(settings.clone());
-    let _ = app.emit("settings-changed", settings);
-    Ok(())
-}
-
-#[command]
-pub fn update_ai_processing_settings(
-    enabled: Option<bool>,
-    post_processing_model_id: Option<Option<String>>,
-    app: AppHandle,
-    cache: State<'_, Arc<SettingsCache>>,
-) -> Result<(), String> {
-    let mut settings = (*cache.get()).clone();
-
-    if let Some(e) = enabled {
-        settings.ai_processing.enabled = e;
-    }
-    if let Some(id) = post_processing_model_id {
-        settings.ai_processing.post_processing_model_id = id;
     }
 
     store::save(&app, &settings)?;

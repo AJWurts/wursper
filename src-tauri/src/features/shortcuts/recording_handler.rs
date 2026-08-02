@@ -1,6 +1,6 @@
 use crate::features::audio::{
-    cancel_recording, start_recording, stop_recording, AudioRecorder, RecordingMode,
-    RecordingState, RecordingStateManager,
+    cancel_recording, start_recording, stop_recording, AudioRecorder, RecordingState,
+    RecordingStateManager,
 };
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -61,13 +61,10 @@ impl RecordingShortcutHandler {
         let recorder = app.state::<Arc<Mutex<AudioRecorder>>>();
 
         let current_state = state_manager.get_state();
-        let current_mode = state_manager.get_recording_mode();
 
         match current_state {
             RecordingState::Idle | RecordingState::Error => {
-                // Set mode to Dictation when starting from idle
-                state_manager.set_recording_mode(RecordingMode::Dictation);
-                log::info!("Toggle mode: Starting recording in dictation mode");
+                log::info!("Toggle mode: Starting recording");
                 let op_start = Instant::now();
                 start_recording(app.clone(), recorder.clone(), state_manager.clone()).await?;
                 let op_elapsed = op_start.elapsed();
@@ -79,17 +76,6 @@ impl RecordingShortcutHandler {
                 }
             }
             RecordingState::Recording => {
-                // Check if we're in Command mode - show toast if so
-                if current_mode == RecordingMode::Command {
-                    log::info!("Toggle mode: Cannot stop - currently in Command Mode");
-                    let _ = crate::features::window::show_toast(
-                        app,
-                        "Recording in Command Mode",
-                        crate::features::window::ToastType::Info,
-                        1.0,
-                    );
-                    return Ok(());
-                }
                 log::info!("Toggle mode: Stopping recording");
                 let op_start = Instant::now();
                 stop_recording(app.clone(), recorder.clone(), state_manager.clone()).await?;
@@ -100,16 +86,6 @@ impl RecordingShortcutHandler {
                         op_elapsed
                     );
                 }
-            }
-            RecordingState::Generating => {
-                // Show toast that we're generating content
-                log::info!("Toggle mode: Cannot start - generating content");
-                let _ = crate::features::window::show_toast(
-                    app,
-                    "Generating content...",
-                    crate::features::window::ToastType::Info,
-                    1.0,
-                );
             }
             _ => {
                 log::debug!(
@@ -185,73 +161,6 @@ impl RecordingShortcutHandler {
         ) {
             log::info!("Escape pressed - cancelling recording");
             cancel_recording(app.clone(), recorder.clone(), state_manager.clone()).await?;
-        }
-
-        Ok(())
-    }
-
-    /// Handle command mode shortcut (sets Command mode, then toggles recording)
-    pub async fn handle_command_mode(
-        &self,
-        app: &AppHandle,
-        event: &ShortcutEvent,
-    ) -> Result<(), String> {
-        // Only respond to key press
-        if event.state != ShortcutState::Pressed {
-            return Ok(());
-        }
-
-        // Throttle rapid presses
-        if self.should_throttle() {
-            log::debug!("Throttling rapid command mode shortcut press");
-            return Ok(());
-        }
-
-        let state_manager = app.state::<Arc<RecordingStateManager>>();
-        let recorder = app.state::<Arc<Mutex<AudioRecorder>>>();
-
-        let current_state = state_manager.get_state();
-        let current_mode = state_manager.get_recording_mode();
-
-        match current_state {
-            RecordingState::Idle | RecordingState::Error => {
-                // Set recording mode to Command before starting
-                state_manager.set_recording_mode(RecordingMode::Command);
-                log::info!("Command mode: Starting recording in command mode");
-                start_recording(app.clone(), recorder.clone(), state_manager.clone()).await?;
-            }
-            RecordingState::Recording => {
-                // Check if we're in Dictation mode - show toast if so
-                if current_mode == RecordingMode::Dictation {
-                    log::info!("Command mode: Cannot stop - currently in Dictation Mode");
-                    let _ = crate::features::window::show_toast(
-                        app,
-                        "Recording in Dictation Mode",
-                        crate::features::window::ToastType::Info,
-                        1.0,
-                    );
-                    return Ok(());
-                }
-                // Stop recording (processing will use the already-set Command mode)
-                log::info!("Command mode: Stopping recording");
-                stop_recording(app.clone(), recorder.clone(), state_manager.clone()).await?;
-            }
-            RecordingState::Generating => {
-                // Show toast that we're generating content
-                log::info!("Command mode: Cannot start - generating content");
-                let _ = crate::features::window::show_toast(
-                    app,
-                    "Generating content...",
-                    crate::features::window::ToastType::Info,
-                    1.0,
-                );
-            }
-            _ => {
-                log::debug!(
-                    "Command mode: Ignoring shortcut in state {:?}",
-                    current_state
-                );
-            }
         }
 
         Ok(())

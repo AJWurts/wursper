@@ -36,7 +36,7 @@ export function HelpPage() {
             <InfoCard.Description>
               Access comprehensive guides, tutorials, and support resources. Our
               community and support team are here to help you get the most out
-              of Dicta.
+              of Wursper.
             </InfoCard.Description>
           </div>
           <div>

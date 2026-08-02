@@ -1,7 +1,5 @@
-import { Plus } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
 import {
   useTranscriptionsStore,
   initializeTranscriptions,
@@ -17,12 +15,10 @@ import {
 } from './search-filter-bar'
 import { StatsHeader } from './stats-header'
 import { TranscriptionGroup } from './transcription-group'
-import { UploadDialog } from './upload-dialog'
 
 export function HomePageContent() {
   const { transcriptions, initialized, getStats, deleteTranscription } =
     useTranscriptionsStore()
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [filters, setFilters] = useState<FilterState>(defaultFilterState)
 
   const stats = getStats()
@@ -56,22 +52,16 @@ export function HomePageContent() {
     <div className="h-full w-full flex flex-col px-8">
       {/* Page Header */}
       <div className="shrink-0 pt-16 pb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-medium tracking-tight text-foreground">
-              Transcriptions
-            </h1>
-            <span className="text-xs font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded tabular-nums">
-              {transcriptions.length}
-            </span>
-          </div>
-          <Button size="sm" onClick={() => setUploadDialogOpen(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1.5" />
-            Upload Audio
-          </Button>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-medium tracking-tight text-foreground">
+            Transcriptions
+          </h1>
+          <span className="text-xs font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded tabular-nums">
+            {transcriptions.length}
+          </span>
         </div>
         <p className="text-sm text-muted-foreground mt-1.5">
-          Your voice recordings and uploaded audio transcriptions.
+          Everything you have dictated, stored locally on this Mac.
         </p>
       </div>
 
@@ -126,11 +116,6 @@ export function HomePageContent() {
           ))
         )}
       </div>
-
-      <UploadDialog
-        open={uploadDialogOpen}
-        onOpenChange={setUploadDialogOpen}
-      />
     </div>
   )
 }

@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "toast", "voice-input", "command-result"],
+  "windows": ["main", "toast", "voice-input"],
   "permissions": [
     "core:default",
     "opener:default",
@@ -24,7 +24,6 @@
     "notification:default",
     "macos-permissions:allow-check-accessibility-permission",
     "macos-permissions:allow-request-accessibility-permission",
-    "process:allow-restart",
-    "posthog:default"
+    "process:allow-restart"
   ]
 }

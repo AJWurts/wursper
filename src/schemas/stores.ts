@@ -26,76 +26,11 @@ export const settingsSchema = z.object({
   privacy: z.object({
     analytics: z.boolean(),
   }),
-  aiProcessing: z.object({
-    enabled: z.boolean(),
-    postProcessingModelId: z.string().nullable(),
-  }),
-})
-
-// Transcription Record Schema
-const transcriptionRecordSchema = z.object({
-  id: z.string(),
-  text: z.string(),
-  timestamp: z.number(),
-  duration: z.number().optional().nullable(),
-  wordCount: z.number(),
-  modelId: z.string(),
-  provider: z.string(),
-})
-
-// Transcriptions Store Schema
-export const transcriptionsSchema = z.object({
-  transcriptions: z.array(transcriptionRecordSchema),
-})
-
-// Snippet Schema
-const snippetSchema = z.object({
-  id: z.string(),
-  snippet: z.string(),
-  expansion: z.string(),
-  createdAt: z.number(),
-})
-
-// Snippets Store Schema
-export const snippetsSchema = z.object({
-  snippets: z.array(snippetSchema),
-})
-
-// Vocabulary Word Schema
-const vocabularyWordSchema = z.object({
-  id: z.string(),
-  word: z.string(),
-  createdAt: z.number(),
-})
-
-// Vocabulary Store Schema
-export const vocabularySchema = z.object({
-  words: z.array(vocabularyWordSchema),
-})
-
-// Vibe Schema
-const vibeSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string(),
-  systemPrompt: z.string(),
-  category: z.enum(['personal', 'work', 'email', 'others']),
-  createdAt: z.number(),
-  isCustom: z.boolean(),
-})
-
-// Vibes Store Schema
-export const vibesSchema = z.object({
-  vibes: z.array(vibeSchema),
 })
 
 // Map of file names to their schemas
 export const storeSchemas: Record<string, z.ZodSchema> = {
   'settings.json': settingsSchema,
-  'transcriptions.json': transcriptionsSchema,
-  'snippets.json': snippetsSchema,
-  'vocabulary.json': vocabularySchema,
-  'vibes.json': vibesSchema,
 }
 
 // Validate store data

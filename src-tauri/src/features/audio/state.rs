@@ -10,18 +10,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use ts_rs::TS;
 
-/// Recording mode determines how the transcription is processed
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, Default)]
-#[ts(export, export_to = "../../src/features/voice-input/types/generated/")]
-#[serde(rename_all = "lowercase")]
-pub enum RecordingMode {
-    /// Normal dictation - transcribe and format speech
-    #[default]
-    Dictation,
-    /// Command mode - use speech as instruction for LLM to generate content
-    Command,
-}
-
 /// Recording state machine
 ///
 /// The state transitions are validated to ensure correct operation:
@@ -102,8 +90,6 @@ impl RecordingState {
 pub struct RecordingStateManager {
     /// Recording state - accessed atomically for lock-free reads/writes
     state: AtomicU8,
-    /// Recording mode (Dictation or Command)
-    recording_mode: Mutex<RecordingMode>,
     /// Current recording file path
     current_file: Mutex<Option<PathBuf>>,
     /// Error message if in error state
@@ -118,7 +104,6 @@ impl RecordingStateManager {
     pub fn new() -> Self {
         Self {
             state: AtomicU8::new(RecordingState::Idle.to_u8()),
-            recording_mode: Mutex::new(RecordingMode::default()),
             current_file: Mutex::new(None),
             error_message: Mutex::new(None),
             recording_device: Mutex::new(None),
@@ -267,20 +252,9 @@ impl RecordingStateManager {
         *self.start_time.lock()
     }
 
-    /// Set recording mode (Dictation or Command)
-    pub fn set_recording_mode(&self, mode: RecordingMode) {
-        *self.recording_mode.lock() = mode;
-    }
-
-    /// Get recording mode
-    pub fn get_recording_mode(&self) -> RecordingMode {
-        *self.recording_mode.lock()
-    }
-
     /// Reset all state to initial values
     pub fn reset(&self) {
         self.force_set_state(RecordingState::Idle);
-        *self.recording_mode.lock() = RecordingMode::default();
         *self.current_file.lock() = None;
         *self.error_message.lock() = None;
         *self.recording_device.lock() = None;

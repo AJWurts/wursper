@@ -2,7 +2,6 @@ import { useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useSettingsStore } from '@/features/settings'
-import { useAnalytics } from '@/lib/analytics'
 
 import { useOnboardingStore } from '../store'
 
@@ -15,7 +14,6 @@ export function useOnboarding() {
   const previousStep = useOnboardingStore(state => state.previousStep)
   const markStepComplete = useOnboardingStore(state => state.markStepComplete)
   const resetOnboarding = useOnboardingStore(state => state.resetOnboarding)
-  const { capture, events } = useAnalytics()
 
   const setOnboardingComplete = useSettingsStore(
     state => state.setOnboardingComplete
@@ -61,21 +59,14 @@ export function useOnboarding() {
   const completeCurrentStep = useCallback(() => {
     if (currentStepData) {
       markStepComplete(currentStepData.id)
-      capture(events.ONBOARDING_STEP_COMPLETED, {
-        step_id: currentStepData.id,
-        step_index: currentStep,
-      })
     }
-  }, [currentStepData, markStepComplete, currentStep, capture, events])
+  }, [currentStepData, markStepComplete, currentStep])
 
   const completeCurrentStepAndGoNext = useCallback(() => {
     completeCurrentStep()
 
     if (isLastStep) {
       setOnboardingComplete(true)
-      capture(events.ONBOARDING_COMPLETED, {
-        total_steps: steps.length,
-      })
       setTimeout(() => {
         navigate('/')
       }, 500)
@@ -92,8 +83,6 @@ export function useOnboarding() {
     isLastStep,
     navigate,
     setOnboardingComplete,
-    capture,
-    events,
     steps.length,
   ])
 

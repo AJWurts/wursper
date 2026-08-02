@@ -1,51 +1,64 @@
 import { invoke } from '@tauri-apps/api/core'
 
 import { useSettingsStore } from '@/features/settings/store'
+import { useTranscriptionsStore } from '@/features/transcriptions'
 
-import { convertToWav } from './audio-converter'
+import type { Transcription } from '@/features/transcriptions'
 
 export interface TranscriptionRequest {
-  audioBlob: Blob
+  /** Raw audio bytes (WAV/PCM) captured for this recording */
+  audioData: Uint8Array
   timestamp: number
   duration: number
 }
 
 /**
- * Processes audio transcription by:
- * 1. Converting audio to WAV format
- * 2. Invoking Rust backend for transcription
- * 3. Handling the complete flow (save, copy/paste, emit events)
+ * Result returned by the Rust transcription command.
+ * Rust is responsible for copying/pasting the text (auto-copy / auto-paste
+ * settings), we only persist the record and refresh the UI.
+ */
+interface TranscriptionResponse {
+  text: string
+  modelId: string
+  provider: string
+}
+
+/**
+ * Transcribe a recording and store the result:
+ * 1. Send the audio to the Rust backend (which picks the selected engine and
+ *    handles clipboard/paste according to the user's settings)
+ * 2. Persist the resulting record in the local SQLite database
  */
 export async function processTranscription(
   request: TranscriptionRequest
-): Promise<void> {
-  const { audioBlob, timestamp, duration } = request
+): Promise<Transcription | null> {
+  const { audioData, timestamp, duration } = request
 
-  // Get selected language from settings
-  const settings = useSettingsStore.getState().settings
-  const language = settings.transcription.language
+  const language = useSettingsStore.getState().settings.transcription.language
 
-  // Convert audio to WAV format (required for Whisper models)
-  // Browser MediaRecorder outputs WebM/Opus, but Whisper expects WAV PCM
-  const wavBlob = await convertToWav(audioBlob)
-  const audioData = new Uint8Array(await wavBlob.arrayBuffer())
+  const response = await invoke<TranscriptionResponse>(
+    'transcribe_and_process',
+    {
+      request: {
+        audioData: Array.from(audioData),
+        timestamp,
+        duration,
+        language: language || null,
+      },
+    }
+  )
 
-  // Call unified Rust command that handles:
-  // 1. Getting selected model
-  // 2. Transcribing with appropriate provider
-  // 3. Saving to transcription store
-  // 4. Copy and paste
-  // 5. Emitting events for UI updates
-  await invoke('transcribe_and_process', {
-    request: {
-      audioData: Array.from(audioData),
-      timestamp,
-      duration,
-      language: language || null, // Pass selected language
-    },
+  if (!response?.text) {
+    return null
+  }
+
+  return useTranscriptionsStore.getState().addTranscription({
+    text: response.text,
+    timestamp,
+    duration,
+    modelId: response.modelId,
+    provider: response.provider,
   })
-
-  console.log('Transcription completed and processed with language:', language)
 }
 
 /**

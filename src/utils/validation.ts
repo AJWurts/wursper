@@ -1,20 +1,10 @@
 import { z } from 'zod'
 
-import {
-  settingsSchema,
-  snippetsSchema as snippetsStoreSchema,
-  transcriptionsSchema as transcriptionsStoreSchema,
-  vibesSchema as vibesStoreSchema,
-  vocabularySchema as vocabularyStoreSchema,
-} from '@/schemas/stores'
+import { settingsSchema } from '@/schemas/stores'
 
 // Map of file names to their schemas
 export const storeSchemas: Record<string, z.ZodSchema> = {
   'settings.json': settingsSchema,
-  'transcriptions.json': transcriptionsStoreSchema,
-  'snippets.json': snippetsStoreSchema,
-  'vocabulary.json': vocabularyStoreSchema,
-  'vibes.json': vibesStoreSchema,
 }
 
 // Validation result type

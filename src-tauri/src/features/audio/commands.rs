@@ -311,7 +311,10 @@ pub async fn start_recording(
                     emit_elapsed
                 );
             } else {
-                log::debug!("HANG DIAGNOSTIC: voice-input-mode emitted in {:?}", emit_elapsed);
+                log::debug!(
+                    "HANG DIAGNOSTIC: voice-input-mode emitted in {:?}",
+                    emit_elapsed
+                );
             }
 
             log::info!(
@@ -554,7 +557,8 @@ pub async fn stop_recording(
                                 app_clone.try_state::<Arc<
                                     tokio::sync::Mutex<crate::features::models::LocalModelManager>,
                                 >>(),
-                                app_clone.try_state::<Arc<crate::features::settings::SettingsCache>>(),
+                                app_clone
+                                    .try_state::<Arc<crate::features::settings::SettingsCache>>(),
                             ) {
                                 match crate::features::transcription::orchestrator::transcribe_and_process(
                                     request,

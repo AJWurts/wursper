@@ -14,15 +14,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/cn'
 
-export type SourceFilter = 'all' | 'recording' | 'upload'
 export type TimeFilter = 'all' | 'today' | 'week' | 'month'
-export type AudioFilter = 'all' | 'with-audio' | 'without-audio'
 
 export interface FilterState {
   search: string
-  source: SourceFilter
   time: TimeFilter
-  audio: AudioFilter
 }
 
 interface SearchFilterBarProps {
@@ -37,23 +33,11 @@ interface FilterOption<T extends string> {
   label: string
 }
 
-const sourceOptions: FilterOption<SourceFilter>[] = [
-  { value: 'all', label: 'All Sources' },
-  { value: 'recording', label: 'Recordings' },
-  { value: 'upload', label: 'Uploads' },
-]
-
 const timeOptions: FilterOption<TimeFilter>[] = [
   { value: 'all', label: 'All Time' },
   { value: 'today', label: 'Today' },
   { value: 'week', label: 'This Week' },
   { value: 'month', label: 'This Month' },
-]
-
-const audioOptions: FilterOption<AudioFilter>[] = [
-  { value: 'all', label: 'All' },
-  { value: 'with-audio', label: 'With Audio' },
-  { value: 'without-audio', label: 'Without Audio' },
 ]
 
 export function SearchFilterBar({
@@ -75,34 +59,21 @@ export function SearchFilterBar({
     updateFilter('search', '')
   }, [updateFilter])
 
-  const activeFilterCount = useMemo(() => {
-    let count = 0
-    if (filters.source !== 'all') count++
-    if (filters.time !== 'all') count++
-    if (filters.audio !== 'all') count++
-    return count
-  }, [filters])
+  const activeFilterCount = useMemo(
+    () => (filters.time !== 'all' ? 1 : 0),
+    [filters]
+  )
 
   const hasActiveFilters = useMemo(() => {
     return filters.search !== '' || activeFilterCount > 0
   }, [filters.search, activeFilterCount])
 
   const clearAllFilters = useCallback(() => {
-    onFiltersChange({
-      search: '',
-      source: 'all',
-      time: 'all',
-      audio: 'all',
-    })
+    onFiltersChange({ search: '', time: 'all' })
   }, [onFiltersChange])
 
   const clearDropdownFilters = useCallback(() => {
-    onFiltersChange({
-      ...filters,
-      source: 'all',
-      time: 'all',
-      audio: 'all',
-    })
+    onFiltersChange({ ...filters, time: 'all' })
   }, [filters, onFiltersChange])
 
   const isFiltered = filteredCount !== totalCount
@@ -159,27 +130,6 @@ export function SearchFilterBar({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            {/* Source Filter */}
-            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-              Source
-            </DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={filters.source}
-              onValueChange={v => updateFilter('source', v as SourceFilter)}
-            >
-              {sourceOptions.map(option => (
-                <DropdownMenuRadioItem
-                  key={option.value}
-                  value={option.value}
-                  className="text-sm"
-                >
-                  {option.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-
-            <DropdownMenuSeparator />
-
             {/* Time Filter */}
             <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
               Time
@@ -189,27 +139,6 @@ export function SearchFilterBar({
               onValueChange={v => updateFilter('time', v as TimeFilter)}
             >
               {timeOptions.map(option => (
-                <DropdownMenuRadioItem
-                  key={option.value}
-                  value={option.value}
-                  className="text-sm"
-                >
-                  {option.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-
-            <DropdownMenuSeparator />
-
-            {/* Audio Filter */}
-            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-              Audio
-            </DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={filters.audio}
-              onValueChange={v => updateFilter('audio', v as AudioFilter)}
-            >
-              {audioOptions.map(option => (
                 <DropdownMenuRadioItem
                   key={option.value}
                   value={option.value}
@@ -277,7 +206,5 @@ export function SearchFilterBar({
 
 export const defaultFilterState: FilterState = {
   search: '',
-  source: 'all',
   time: 'all',
-  audio: 'all',
 }

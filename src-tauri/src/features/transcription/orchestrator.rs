@@ -1,46 +1,23 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tauri::{command, AppHandle, Emitter, Manager, State};
+use tauri::{command, AppHandle, Emitter, State};
 use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
-use crate::features::ai_processing::{generate_from_command, CommandModeRequest};
-use crate::features::audio::{RecordingMode, RecordingState, RecordingStateManager};
 use crate::features::clipboard;
 use crate::features::models::LocalModelManager;
 use crate::features::security;
 use crate::features::settings::SettingsCache;
+use crate::features::transcriptions::{latest_transcription, save_record, TranscriptionRecord};
 use crate::types::settings::Settings;
-use crate::utils::app_categorization::categorize_app;
 use crate::utils::logger;
 use crate::utils::retry::{with_retry, RetryConfig};
 
-use super::orchestrator_helpers::{
-    apply_ai_post_processing, create_empty_prompt_context, get_model_name,
-    get_snippets, get_vocabulary_words,
-};
 use super::providers::{assemblyai, azure, deepgram, elevenlabs, google, local_whisper, openai};
-use super::vocabulary::get_transcription_context;
-use crate::features::recordings::metadata::RecordingMetadata;
-use crate::features::recordings::storage::{
-    create_recording_folder, get_all_recordings, read_metadata, save_metadata,
-};
 
 // Global state for debouncing paste operations (using parking_lot for faster locking)
 static LAST_PASTE_TIME: parking_lot::Mutex<Option<Instant>> = parking_lot::Mutex::new(None);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptionRecord {
-    pub id: String,
-    pub text: String,
-    pub timestamp: i64,
-    pub duration: Option<f64>,
-    pub word_count: usize,
-    pub model_id: String,
-    pub provider: String,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,12 +32,11 @@ pub struct TranscribeRequest {
 }
 
 /// Unified transcription command that handles the entire flow:
-/// 1. Get selected model and focused app
-/// 2. Transcribe using appropriate provider
-/// 3. Apply AI post-processing if enabled
-/// 4. Save to recordings/TIMESTAMP/ folder
-/// 5. Copy and paste text
-/// 6. Emit events for UI updates
+/// 1. Get selected model
+/// 2. Transcribe using the appropriate provider
+/// 3. Persist the transcript to SQLite
+/// 4. Copy and/or paste text
+/// 5. Emit events for UI updates
 #[command]
 pub async fn transcribe_and_process(
     request: TranscribeRequest,
@@ -68,22 +44,11 @@ pub async fn transcribe_and_process(
     local_model_state: State<'_, Arc<Mutex<LocalModelManager>>>,
     settings_cache: State<'_, Arc<SettingsCache>>,
 ) -> Result<Option<TranscriptionRecord>, String> {
-    let start_time = Instant::now();
     // Get Arc<Settings> snapshot - avoids cloning entire struct
     let settings = settings_cache.get();
 
     // Step 1: Get selected transcription model
     let selected_model = get_selected_model(&app, &settings)?;
-
-    // Step 2: Get focused application
-    let focused_app =
-        clipboard::get_focused_app()
-            .await
-            .unwrap_or_else(|_| clipboard::FocusedApp {
-                name: "Unknown".to_string(),
-                bundle_id: "".to_string(),
-            });
-    let focused_app_name = focused_app.name.clone();
 
     if is_audio_silent(&request.audio_data)? {
         logger::debug("Audio is silent, skipping transcription");
@@ -114,8 +79,8 @@ pub async fn transcribe_and_process(
         return Ok(None);
     }
 
-    // Step 4: Transcribe using appropriate provider
-    let raw_transcription = transcribe_with_provider(
+    // Step 2: Transcribe using appropriate provider
+    let transcription = transcribe_with_provider(
         &app,
         request.audio_data.clone(),
         &selected_model,
@@ -126,343 +91,40 @@ pub async fn transcribe_and_process(
     .await?;
 
     // Skip if transcription is empty
-    if raw_transcription.trim().is_empty() {
+    if transcription.trim().is_empty() {
         logger::debug("Transcription is empty, skipping");
         return Ok(None);
     }
 
-    // Step 4.5: Check recording mode (Command Mode or Dictation Mode)
-    let state_manager = app.state::<Arc<RecordingStateManager>>();
-    let recording_mode = state_manager.get_recording_mode();
-
-    // Handle Command Mode
-    if recording_mode == RecordingMode::Command {
-        use crate::features::ai_processing::CommandModeResult;
-
-        log::info!("Command Mode: Processing transcription as instruction");
-
-        // Hide pill window first
-        crate::features::window::hide_pill_window(&app);
-
-        // Show command result window with transcription
-        if let Err(e) =
-            crate::features::window::show_command_result_window(&app, &raw_transcription)
-        {
-            log::warn!("Failed to show command result window: {}", e);
-        }
-
-        // Transition to Generating state
-        if let Err(e) = state_manager.set_state(RecordingState::Generating) {
-            log::warn!("Failed to transition to Generating state: {}", e);
-        }
-        app.emit("recording-state-changed", "generating")
-            .map_err(|e| format!("Failed to emit state change: {}", e))?;
-
-        // Get the post-processing model for command generation
-        let post_processing_model_id = settings
-            .ai_processing
-            .post_processing_model_id
-            .as_ref()
-            .ok_or("Command Mode requires AI processing to be enabled with a model selected")?;
-
-        // Get vocabulary and snippets for personalization
-        let vocabulary = get_vocabulary_words(&app).unwrap_or(None);
-        let snippets = get_snippets(&app).unwrap_or(None);
-
-        log::info!(
-            "Command mode: using {} vocabulary words and {} snippets",
-            vocabulary.as_ref().map(|v| v.len()).unwrap_or(0),
-            snippets.as_ref().map(|s| s.len()).unwrap_or(0)
-        );
-
-        // Generate content using transcription as instruction
-        let command_result = generate_from_command(
-            CommandModeRequest {
-                instruction: raw_transcription.clone(),
-                model_id: post_processing_model_id.to_string(),
-                vocabulary,
-                snippets,
-            },
-            app.clone(),
-        )
-        .await?;
-
-        // Reset recording mode back to Dictation for next use
-        state_manager.set_recording_mode(RecordingMode::Dictation);
-
-        // Reset state to Idle and emit state change
-        if let Err(e) = state_manager.set_state(RecordingState::Idle) {
-            log::warn!("Failed to reset state to Idle: {}", e);
-            state_manager.force_set_state(RecordingState::Idle);
-        }
-        app.emit("recording-state-changed", "idle")
-            .map_err(|e| format!("Failed to emit state change: {}", e))?;
-
-        // Handle the command result
-        match command_result {
-            CommandModeResult::InvalidRequest => {
-                log::info!("Command Mode: Invalid request detected, showing error");
-
-                // Emit error event to command result window
-                app.emit("command-result-error", "This doesn't look like a content request. Try asking me to write, draft, or create something.")
-                    .map_err(|e| format!("Failed to emit error: {}", e))?;
-
-                // Use std::thread for delayed hide - tokio::spawn can deadlock with window IPC
-                let app_clone = app.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(5));
-                    if let Err(e) = crate::features::window::hide_command_result_window(&app_clone)
-                    {
-                        log::warn!("Failed to hide command result window: {}", e);
-                    }
-                });
-
-                // Return None - no content was generated
-                return Ok(None);
-            }
-            CommandModeResult::Success(generated_content) => {
-                // Calculate processing time
-                let processing_time = start_time.elapsed().as_millis() as u64;
-
-                // Create recording folder for command mode entry
-                let recording_folder = create_recording_folder(&app, request.timestamp)?;
-
-                // Use model ID as name (simplified - could be enhanced later)
-                let post_processing_model_name = post_processing_model_id.to_string();
-
-                // Determine post-processing provider from model_id
-                let post_processing_provider = if post_processing_model_id.starts_with("claude-") {
-                    "anthropic"
-                } else if post_processing_model_id.starts_with("gpt-") {
-                    "openai"
-                } else {
-                    "local-llm"
-                };
-
-                // Create and save metadata for command mode
-                let metadata = RecordingMetadata::for_command(
-                    raw_transcription.clone(),
-                    generated_content.clone(),
-                    request.timestamp,
-                    request.duration.unwrap_or(0.0) * 1000.0,
-                    processing_time,
-                    selected_model.id.clone(),
-                    get_model_name(&selected_model),
-                    selected_model.provider.clone(),
-                    post_processing_model_id.to_string(),
-                    post_processing_model_name,
-                    post_processing_provider.to_string(),
-                    request
-                        .recording_device
-                        .clone()
-                        .unwrap_or_else(|| "Unknown".to_string()),
-                );
-
-                // Save metadata
-                if let Err(e) = save_metadata(&recording_folder, &metadata) {
-                    log::warn!("Failed to save command mode metadata: {}", e);
-                }
-
-                // Handle auto-paste for command mode
-                let auto_paste = settings.transcription.auto_paste;
-
-                // Hide command result window
-                if let Err(e) = crate::features::window::hide_command_result_window(&app) {
-                    log::warn!("Failed to hide command result window: {}", e);
-                }
-
-                if auto_paste {
-                    if let Err(e) = clipboard::copy_and_paste(generated_content.clone()).await {
-                        logger::error(&format!("Failed to copy and paste: {}", e));
-                    }
-                } else {
-                    // Copy to clipboard
-                    use tauri_plugin_clipboard_manager::ClipboardExt;
-                    if let Err(e) = app.clipboard().write_text(generated_content.clone()) {
-                        logger::error(&format!("Failed to copy to clipboard: {}", e));
-                    }
-                }
-
-                // Show success toast
-                let _ = crate::features::window::show_toast(
-                    &app,
-                    "Content generated",
-                    crate::features::window::ToastType::Success,
-                    0.4,
-                );
-
-                // Emit event for UI updates
-                app.emit("transcriptions-changed", ())
-                    .map_err(|e| format!("Failed to emit sync event: {}", e))?;
-
-                // Return record
-                return Ok(Some(TranscriptionRecord {
-                    id: request.timestamp.to_string(),
-                    text: generated_content,
-                    timestamp: request.timestamp,
-                    duration: request.duration,
-                    word_count: raw_transcription.split_whitespace().count(),
-                    model_id: selected_model.id,
-                    provider: selected_model.provider,
-                }));
-            }
-        }
-    }
-
-    // --- Dictation Mode (default) ---
-
-    // Step 5: Get the existing recording folder (already created during start_recording)
+    // Step 3: Handle the saved audio file based on the user setting
     let recordings_dir = crate::features::recordings::get_recordings_dir(&app)?;
     let recording_folder = recordings_dir.join(request.timestamp.to_string());
-
-    // Verify the folder exists (it should have been created during recording)
-    if !crate::utils::async_fs::exists(&recording_folder).await {
-        return Err(format!(
-            "Recording folder does not exist: {}",
-            recording_folder.display()
-        ));
-    }
-
-    // Step 6: Check if AI post-processing is enabled
-    let ai_processing_enabled = settings.ai_processing.enabled;
-
-    // Log AI processing configuration for debugging
-    if ai_processing_enabled {
-        log::info!(
-            "AI post-processing enabled. Model ID: {:?}",
-            settings.ai_processing.post_processing_model_id
-        );
-    } else {
-        log::debug!("AI post-processing is disabled");
-    }
-
-    // Track if we showed a warning/error toast (to skip success toast later)
-    let mut showed_warning_toast = false;
-
-    let (
-        final_text,
-        post_processed_text,
-        style_applied,
-        style_category,
-        prompt_context,
-        post_processing_model_id,
-        post_processing_model_name,
-        post_processing_provider,
-    ) = if ai_processing_enabled {
-        // Try to apply AI post-processing
-        match apply_ai_post_processing(&app, &raw_transcription, &focused_app.name, &settings).await
-        {
-            Ok(result) => (
-                result.final_text,
-                Some(result.post_processed_text),
-                result.style_applied,
-                result.style_category,
-                result.prompt_context,
-                Some(result.model_id),
-                result.model_name,
-                result.provider,
-            ),
-            Err(e) => {
-                // Post-processing failed (likely no model selected) - continue without it
-                logger::warn(&format!(
-                    "Post-processing failed: {}. Continuing with raw transcription.",
-                    e
-                ));
-
-                // Show toast to user (warning takes precedence over success)
-                let _ = crate::features::window::show_toast(
-                    &app,
-                    "Post-processing skipped: No model selected",
-                    crate::features::window::ToastType::Warning,
-                    1.0,
-                );
-                showed_warning_toast = true;
-
-                // Use raw transcription
-                (
-                    raw_transcription.clone(),
-                    None,
-                    None,
-                    None,
-                    create_empty_prompt_context(),
-                    None,
-                    None,
-                    None,
-                )
-            }
-        }
-    } else {
-        // No post-processing
-        (
-            raw_transcription.clone(),
-            None,
-            None,
-            None,
-            create_empty_prompt_context(),
-            None,
-            None,
-            None,
-        )
-    };
-
-    // Step 8: Calculate processing time
-    let processing_time = start_time.elapsed().as_millis() as u64;
-
-    // Step 9: Determine app category
-    let app_category = categorize_app(&focused_app.name);
-
-    // Step 10: Check if audio recordings should be saved
-    let save_audio_recordings = settings.system.save_audio_recordings;
-
-    // Step 11: Handle audio file based on setting
     let audio_path = recording_folder.join("audio.wav");
-    let has_audio = if save_audio_recordings {
-        // Audio file exists (was created during recording)
-        crate::utils::async_fs::exists(&audio_path).await
-    } else {
-        // Delete the audio file if save is disabled
-        if crate::utils::async_fs::exists(&audio_path).await {
-            if let Err(e) = crate::utils::async_fs::remove_file(&audio_path).await {
-                logger::warn(&format!("Failed to delete audio file: {}", e));
-            } else {
-                logger::debug("Audio file deleted (saveAudioRecordings disabled)");
-            }
+
+    if !settings.system.save_audio_recordings && crate::utils::async_fs::exists(&audio_path).await {
+        if let Err(e) = crate::utils::async_fs::remove_file(&audio_path).await {
+            logger::warn(&format!("Failed to delete audio file: {}", e));
+        } else {
+            logger::debug("Audio file deleted (saveAudioRecordings disabled)");
         }
-        false
+    }
+
+    // Step 4: Build and persist the record
+    let record = TranscriptionRecord {
+        id: request.timestamp.to_string(),
+        text: transcription.clone(),
+        timestamp: request.timestamp,
+        duration: request.duration,
+        word_count: transcription.split_whitespace().count() as u32,
+        model_id: selected_model.id.clone(),
+        provider: selected_model.provider.clone(),
     };
 
-    // Step 12: Create comprehensive metadata
-    let metadata = RecordingMetadata::new(
-        raw_transcription.clone(),
-        final_text.clone(),
-        post_processed_text,
-        request.timestamp,
-        request.duration.unwrap_or(0.0) * 1000.0, // Convert to ms
-        processing_time,
-        selected_model.id.clone(),
-        get_model_name(&selected_model),
-        selected_model.provider.clone(),
-        post_processing_model_id,
-        post_processing_model_name,
-        post_processing_provider,
-        request.language.unwrap_or_else(|| "en".to_string()),
-        request.translate,
-        request
-            .recording_device
-            .unwrap_or_else(|| "Unknown".to_string()),
-        focused_app_name,
-        app_category.as_str().to_string(),
-        ai_processing_enabled,
-        style_applied,
-        style_category,
-        prompt_context,
-        has_audio,
-    );
+    if let Err(e) = save_record(&app, &record) {
+        logger::error(&format!("Failed to store transcription: {}", e));
+    }
 
-    // Step 13: Save metadata
-    save_metadata(&recording_folder, &metadata)?;
-
-    // Step 14: Handle auto-paste/copy (do this BEFORE showing success toast)
+    // Step 5: Handle auto-paste/copy (do this BEFORE showing success toast)
     let auto_paste = settings.transcription.auto_paste;
     let auto_copy_to_clipboard = settings.transcription.auto_copy_to_clipboard;
 
@@ -470,40 +132,29 @@ pub async fn transcribe_and_process(
         app.emit("hide_voice_input", ())
             .map_err(|e| format!("Failed to emit hide event: {}", e))?;
 
-        if let Err(e) = clipboard::copy_and_paste(final_text.clone()).await {
+        if let Err(e) = clipboard::copy_and_paste(transcription.clone()).await {
             logger::error(&format!("Failed to copy and paste: {}", e));
         }
     } else if auto_copy_to_clipboard {
         use tauri_plugin_clipboard_manager::ClipboardExt;
-        if let Err(e) = app.clipboard().write_text(final_text.clone()) {
+        if let Err(e) = app.clipboard().write_text(transcription.clone()) {
             logger::error(&format!("Failed to copy to clipboard: {}", e));
         }
     }
 
-    // Step 15: Show success toast AFTER paste/copy step - skip if warning was shown
-    if !showed_warning_toast {
-        let _ = crate::features::window::show_toast(
-            &app,
-            "Transcription saved",
-            crate::features::window::ToastType::Success,
-            0.4,
-        );
-    }
+    // Step 6: Show success toast AFTER paste/copy step
+    let _ = crate::features::window::show_toast(
+        &app,
+        "Transcription saved",
+        crate::features::window::ToastType::Success,
+        0.4,
+    );
 
-    // Step 17: Emit events for UI updates
+    // Step 7: Emit events for UI updates
     app.emit("transcriptions-changed", ())
         .map_err(|e| format!("Failed to emit sync event: {}", e))?;
 
-    // Return record for backward compatibility
-    Ok(Some(TranscriptionRecord {
-        id: request.timestamp.to_string(),
-        text: final_text,
-        timestamp: request.timestamp,
-        duration: request.duration,
-        word_count: raw_transcription.split_whitespace().count(),
-        model_id: selected_model.id,
-        provider: selected_model.provider,
-    }))
+    Ok(Some(record))
 }
 
 fn get_selected_model(app: &AppHandle, settings: &Settings) -> Result<SelectedModel, String> {
@@ -549,23 +200,10 @@ fn get_selected_model(app: &AppHandle, settings: &Settings) -> Result<SelectedMo
     ))
 }
 
-/// Get the last (most recent) transcript from the new recordings storage
+/// Get the last (most recent) transcript from the transcription database
 #[command]
 pub async fn get_last_transcript(app: AppHandle) -> Result<String, String> {
-    // Get all recordings sorted by timestamp (newest first)
-    let recordings = get_all_recordings(&app)?;
-
-    if recordings.is_empty() {
-        return Err("No recordings found".to_string());
-    }
-
-    // Get the first (most recent) recording
-    let last_recording = recordings.first().ok_or("No recordings available")?;
-
-    // Read metadata from the recording
-    let metadata = read_metadata(last_recording)?;
-
-    Ok(metadata.result)
+    latest_transcription(&app)?.ok_or_else(|| "No transcriptions found".to_string())
 }
 
 /// Paste the last transcript using the clipboard
@@ -610,24 +248,6 @@ async fn transcribe_with_provider(
     translate: bool,
     local_model_state: State<'_, Arc<Mutex<LocalModelManager>>>,
 ) -> Result<String, String> {
-    // Get vocabulary and snippets context for transcription providers
-    let vocab_context = get_transcription_context(app);
-    let prompt = vocab_context.to_prompt();
-    let word_list = if vocab_context.is_empty() {
-        None
-    } else {
-        Some(vocab_context.to_word_list())
-    };
-
-    if prompt.is_some() {
-        log::debug!(
-            "Using vocabulary context with {} words/phrases for transcription",
-            vocab_context.vocabulary_words.len()
-                + vocab_context.snippet_triggers.len()
-                + vocab_context.snippet_expansions.len()
-        );
-    }
-
     // Retry configuration for cloud STT providers
     let retry_config = RetryConfig::for_stt_providers();
 
@@ -643,16 +263,15 @@ async fn transcribe_with_provider(
             let key = api_key.clone();
             let model_id = model.id.clone();
             let lang = language.clone();
-            let p = prompt.clone();
 
             with_retry(retry_config, || {
                 let audio = audio.clone();
                 let key = key.clone();
                 let model_id = model_id.clone();
                 let lang = lang.clone();
-                let p = p.clone();
                 async move {
-                    openai::transcribe_with_openai(audio, key, Some(model_id), lang, None, p).await
+                    openai::transcribe_with_openai(audio, key, Some(model_id), lang, None, None)
+                        .await
                 }
             })
             .await?
@@ -674,14 +293,12 @@ async fn transcribe_with_provider(
             let audio = audio_data.clone();
             let key = api_key.clone();
             let lang = google_language.clone();
-            let wl = word_list.clone();
 
             with_retry(retry_config, || {
                 let audio = audio.clone();
                 let key = key.clone();
                 let lang = lang.clone();
-                let wl = wl.clone();
-                async move { google::transcribe_with_google(audio, key, lang, wl).await }
+                async move { google::transcribe_with_google(audio, key, lang, None).await }
             })
             .await?
         }
@@ -692,7 +309,7 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language.clone(),
                 translate,
-                prompt.clone(),
+                None,
                 local_model_state,
             )
             .await?
@@ -727,7 +344,7 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language.clone(),
                 translate,
-                prompt.clone(),
+                None,
                 local_model_state,
             )
             .await?
@@ -741,7 +358,7 @@ async fn transcribe_with_provider(
                 Some(model.id.clone()),
                 language.clone(),
                 translate,
-                prompt.clone(),
+                None,
                 local_model_state,
             )
             .await?
@@ -772,14 +389,12 @@ async fn transcribe_with_provider(
             let audio = audio_data.clone();
             let key = api_key.clone();
             let lang = language.clone();
-            let wl = word_list.clone();
 
             with_retry(retry_config, || {
                 let audio = audio.clone();
                 let key = key.clone();
                 let lang = lang.clone();
-                let wl = wl.clone();
-                async move { assemblyai::transcribe_with_assemblyai(audio, key, lang, wl).await }
+                async move { assemblyai::transcribe_with_assemblyai(audio, key, lang, None).await }
             })
             .await?
         }
@@ -792,14 +407,12 @@ async fn transcribe_with_provider(
             let audio = audio_data.clone();
             let key = api_key.clone();
             let lang = language.clone();
-            let wl = word_list.clone();
 
             with_retry(retry_config, || {
                 let audio = audio.clone();
                 let key = key.clone();
                 let lang = lang.clone();
-                let wl = wl.clone();
-                async move { deepgram::transcribe_with_deepgram(audio, key, lang, wl).await }
+                async move { deepgram::transcribe_with_deepgram(audio, key, lang, None).await }
             })
             .await?
         }
@@ -821,14 +434,12 @@ async fn transcribe_with_provider(
             let audio = audio_data.clone();
             let key = api_key.clone();
             let lang = azure_language.clone();
-            let wl = word_list.clone();
 
             with_retry(retry_config, || {
                 let audio = audio.clone();
                 let key = key.clone();
                 let lang = lang.clone();
-                let wl = wl.clone();
-                async move { azure::transcribe_with_azure(audio, key, None, lang, wl).await }
+                async move { azure::transcribe_with_azure(audio, key, None, lang, None).await }
             })
             .await?
         }

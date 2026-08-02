@@ -4,7 +4,6 @@ import * as React from 'react'
 
 import { Button, ButtonProps } from '@/components/ui/button'
 import { useControlledState } from '@/hooks/use-controlled-state'
-import { useAnalytics } from '@/lib/analytics'
 import { cn } from '@/lib/cn'
 
 type CopyButtonProps = ButtonProps & {
@@ -26,7 +25,6 @@ function CopyButton({
     value: copied,
     onChange: onCopiedChange,
   })
-  const { capture, events } = useAnalytics()
 
   const handleCopy = React.useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -37,9 +35,6 @@ function CopyButton({
           .then(() => {
             setIsCopied(true)
             onCopiedChange?.(true, content)
-            capture(events.COPY_TO_CLIPBOARD, {
-              content_length: content.length,
-            })
             setTimeout(() => {
               setIsCopied(false)
               onCopiedChange?.(false)
@@ -50,16 +45,7 @@ function CopyButton({
           })
       }
     },
-    [
-      onClick,
-      copied,
-      content,
-      setIsCopied,
-      onCopiedChange,
-      delay,
-      capture,
-      events,
-    ]
+    [onClick, copied, content, setIsCopied, onCopiedChange, delay]
   )
 
   return (
