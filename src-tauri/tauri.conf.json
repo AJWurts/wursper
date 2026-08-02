@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Dicta",
+  "productName": "Wursper",
   "version": "0.1.0",
-  "identifier": "com.nitintf.dicta",
+  "identifier": "com.alexwurts.wursper",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Dicta",
+        "title": "Wursper",
         "label": "main",
         "width": 1200,
         "height": 800,
